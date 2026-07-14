@@ -543,6 +543,7 @@ static int add_to_replace_list(REPLACE_LIST **list, const char *pat, const char 
        */
       t = last;
       FREE(&t->template);
+      mutt_free_regexp(&rx);
       break;
     }
     if (!last->next)
