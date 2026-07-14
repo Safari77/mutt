@@ -441,6 +441,7 @@ mutt_copy_header(FILE *in, HEADER *h, FILE *out, int flags, const char *prefix)
 
   if ((flags & CH_UPDATE_LABEL) && h->env && h->env->x_label)
   {
+    int rc;
     temp_hdr = h->env->x_label;
     /* env->x_label isn't currently stored with direct references
      * elsewhere.  Context->label_hash strdups the keys.  But to be
@@ -450,17 +451,19 @@ mutt_copy_header(FILE *in, HEADER *h, FILE *out, int flags, const char *prefix)
       temp_hdr = safe_strdup(temp_hdr);
       rfc2047_encode_string(&temp_hdr);
     }
-    if (mutt_write_one_header(out, "X-Label", temp_hdr,
+    rc = mutt_write_one_header(out, "X-Label", temp_hdr,
                               flags & CH_PREFIX ? prefix : 0,
                               mutt_window_wrap_cols(MuttIndexWindow, Wrap),
-                              flags) == -1)
-      return -1;
+                              flags);
     if (!(flags & CH_DECODE))
       FREE(&temp_hdr);
+    if (rc == -1)
+      return -1;
   }
 
   if ((flags & CH_UPDATE_SUBJECT) && h->env && h->env->subject)
   {
+    int rc;
     temp_hdr = h->env->subject;
     /* env->subject is directly referenced in Context->subj_hash, so we
      * have to be careful not to encode (and thus free) that memory. */
@@ -469,13 +472,14 @@ mutt_copy_header(FILE *in, HEADER *h, FILE *out, int flags, const char *prefix)
       temp_hdr = safe_strdup(temp_hdr);
       rfc2047_encode_string(&temp_hdr);
     }
-    if (mutt_write_one_header(out, "Subject", temp_hdr,
+    rc = mutt_write_one_header(out, "Subject", temp_hdr,
                               flags & CH_PREFIX ? prefix : 0,
                               mutt_window_wrap_cols(MuttIndexWindow, Wrap),
-                              flags) == -1)
-      return -1;
+                              flags);
     if (!(flags & CH_DECODE))
       FREE(&temp_hdr);
+    if (rc == -1)
+      return -1;
   }
 
   if ((flags & CH_NONEWLINE) == 0)
