@@ -2321,6 +2321,7 @@ int smime_gpgme_decrypt_mime(FILE *fpin, FILE **fpout, BODY *b, BODY **cur)
 
 bail:
   mutt_buffer_pool_release(&tempfile);
+  safe_fclose(&tmpfp);
   mutt_free_body(cur);
   return -1;
 }
