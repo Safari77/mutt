@@ -102,25 +102,20 @@ int mutt_background_has_backgrounded(void)
 int mutt_background_process_waitpid(void)
 {
   BACKGROUND_PROCESS *process;
-  pid_t pid;
   int has_finished = 0;
 
   if (!ProcessList)
     return 0;
 
-  while ((pid = waitpid(-1, NULL, WNOHANG)) > 0)
+  process = ProcessList;
+  while (process)
   {
-    process = ProcessList;
-    while (process)
+    if (!process->finished && waitpid(process->pid, NULL, WNOHANG) > 0)
     {
-      if (process->pid == pid)
-      {
-        process->finished = 1;
-        has_finished = 1;
-        break;
-      }
-      process = process->next;
+      process->finished = 1;
+      has_finished = 1;
     }
+    process = process->next;
   }
 
   return has_finished;
