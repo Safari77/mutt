@@ -149,6 +149,8 @@ static int ssl_load_certificates(SSL_CTX *ctx)
     {
       X509_STORE_add_cert(store, cert);
     }
+    X509_free(cert);
+    cert = NULL;
   }
   /* PEM_read_X509 sets the error NO_START_LINE on eof */
   if (ERR_GET_REASON(ERR_peek_last_error()) != PEM_R_NO_START_LINE)
