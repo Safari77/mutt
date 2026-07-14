@@ -1041,30 +1041,41 @@ void mutt_perror(const char *s)
 
 int mutt_any_key_to_continue(const char *s)
 {
-  struct termios t;
-  struct termios old;
-  int f, ch;
+  struct termios old_t, new_t;
+  int ch;
+  int term_modified = 0;
 
-  f = open("/dev/tty", O_RDONLY);
-  tcgetattr(f, &t);
-  memcpy((void *)&old, (void *)&t, sizeof(struct termios)); /* save original state */
-  t.c_lflag &= ~(ICANON | ECHO);
-  t.c_cc[VMIN] = 1;
-  t.c_cc[VTIME] = 0;
-  tcsetattr(f, TCSADRAIN, &t);
-  fflush(stdout);
+  /* Print the prompt and ensure it reaches the screen */
   if (s)
     fputs(s, stdout);
   else
     fputs(_("Press any key to continue..."), stdout);
   fflush(stdout);
-  ch = fgetc(stdin);
-  fflush(stdin);
-  tcsetattr(f, TCSADRAIN, &old);
-  close(f);
+
+  /* Attempt to get terminal attributes for standard input */
+  if (tcgetattr(STDIN_FILENO, &old_t) == 0)
+  {
+    new_t = old_t;
+    new_t.c_lflag &= ~(ICANON | ECHO);
+    new_t.c_cc[VMIN] = 1;
+    new_t.c_cc[VTIME] = 0;
+
+    /* TCSANOW applies the change immediately */
+    if (tcsetattr(STDIN_FILENO, TCSANOW, &new_t) == 0)
+      term_modified = 1;
+  }
+
+  /* Read the single character */
+  ch = getchar();
+
+  /* Restore original terminal attributes if we modified them */
+  if (term_modified)
+    tcsetattr(STDIN_FILENO, TCSANOW, &old_t);
+
   fputs("\r\n", stdout);
   mutt_clear_error();
-  return (ch);
+
+  return ch;
 }
 
 int mutt_do_pager(const char *banner,
