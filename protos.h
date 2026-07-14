@@ -16,12 +16,16 @@
  *     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
+#pragma once
+
+#include "config.h"
 
 #ifdef HAVE_INTTYPES_H
 # include <inttypes.h>
 #endif
 
 #include "mbyte.h"
+#include "mutt.h"
 
 #define MoreArgs(p) (*p->dptr && *p->dptr != ';' && *p->dptr != '#')
 

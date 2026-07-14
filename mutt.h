@@ -54,6 +54,7 @@
 #include <pwd.h>
 #include <grp.h>
 
+#include "config.h"
 #include "rfc822.h"
 #include "hash.h"
 #include "charset.h"

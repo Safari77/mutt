@@ -1,6 +1,8 @@
 #ifndef _MBYTE_H
 # define _MBYTE_H
 
+#include <stddef.h>
+
 # ifndef HAVE_WCWIDTH
 int wcwidth(wchar_t wc);
 # endif /* !HAVE_WCWIDTH */
