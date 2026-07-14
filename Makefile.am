@@ -40,8 +40,7 @@ mutt_SOURCES = \
 	score.c send.c sendlib.c signal.c sort.c \
 	status.c system.c thread.c charset.c history.c lib.c \
 	mutt_lisp.c muttlib.c editmsg.c mbyte.c \
-	url.c ascii.c crypt-mod.c crypt-mod.h safe_asprintf.c \
-	mutt_random.c listmenu.c messageid.c
+	url.c ascii.c crypt-mod.c crypt-mod.h safe_asprintf.c listmenu.c
 
 nodist_mutt_SOURCES = $(BUILT_SOURCES)
 
@@ -73,7 +72,7 @@ EXTRA_mutt_SOURCES = account.c bcache.c compress.c crypt-gpgme.c crypt-mod-pgp-c
 	pgppacket.c pop.c pop_auth.c pop_lib.c remailer.c resize.c sha1.c \
 	sidebar.c smime.c smtp.c wcwidth.c mutt_zstrm.c \
 	bcache.h browser.h hcache.h mbyte.h monitor.h mutt_idna.h remailer.h url.h \
-	mutt_lisp.h mutt_random.h
+	mutt_lisp.h
 
 EXTRA_DIST = COPYRIGHT GPL OPS OPS.PGP OPS.CRYPT OPS.SMIME TODO UPDATING \
 	configure account.h \
