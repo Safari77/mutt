@@ -944,7 +944,15 @@ int mutt_save_message(HEADER *h, int delete, int decode, int decrypt)
   if (!LastSaveFolder)
     LastSaveFolder = mutt_buffer_new();
   if (mutt_strcmp(mutt_b2s(buf), ".") == 0)
+  {
+    if (mutt_buffer_len(LastSaveFolder) == 0)
+    {
+      mutt_error _("No previous folder to save to.");
+      rc = -1;
+      goto cleanup;
+    }
     mutt_buffer_strcpy(buf, mutt_b2s(LastSaveFolder));
+  }
   else
     mutt_buffer_strcpy(LastSaveFolder, mutt_b2s(buf));
 
