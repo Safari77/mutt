@@ -776,7 +776,7 @@ static char *data_object_to_tempfile(gpgme_data_t data, const char *tempf, FILE 
   BUFFER *tempfb = NULL;
   char *rv = NULL;
   FILE *fp;
-  size_t nread = 0;
+  ssize_t nread = 0;
 
   if (!tempf)
     {
@@ -794,9 +794,9 @@ static char *data_object_to_tempfile(gpgme_data_t data, const char *tempf, FILE 
          ? gpgme_error_from_errno(errno) : 0);
   if (!err)
     {
-      char buf[4096];
+      char buf[65536];
 
-      while ((nread = gpgme_data_read(data, buf, sizeof(buf))))
+      while ((nread = gpgme_data_read(data, buf, sizeof(buf))) > 0)
         {
           if (fwrite(buf, nread, 1, fp) != 1)
             {
