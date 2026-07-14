@@ -555,7 +555,7 @@ int mutt_alias_complete(char *s, size_t buflen)
       if (mutt_strcmp(bestname, s) != 0)
       {
         /* we are adding something to the completion */
-        strfcpy(s, bestname, mutt_strlen(bestname) + 1);
+        strfcpy(s, bestname, buflen);
         return 1;
       }
 
