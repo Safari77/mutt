@@ -1391,6 +1391,8 @@ void mutt_format_string(char *dest, size_t destlen,
   char scratch[MB_LEN_MAX];
   mbstate_t mbstate1, mbstate2;
 
+  if (destlen == 0)
+    return;
   memset(&mbstate1, 0, sizeof(mbstate1));
   memset(&mbstate2, 0, sizeof(mbstate2));
   --destlen;
