@@ -118,8 +118,40 @@ typedef struct crypt_entry
 
 
 static struct crypt_cache *id_defaults = NULL;
-static gpgme_key_t signature_key = NULL;
+/* NULL-terminated list of the keys for every signature attached to the
+   current message.  show_one_sig_status() appends to it as each signature
+   is processed, and verify_sender() iterates over the whole list so that a
+   message signed by several keys still verifies when any one key matches
+   the sender.  (Previously a single gpgme_key_t was overwritten on every
+   iteration, so only the last signature's key survived.) */
+static gpgme_key_t *signature_keys = NULL;
 static char *current_sender = NULL;
+
+/* Unref every cached signature key and free the list itself. */
+static void signature_keys_free (void)
+{
+  if (signature_keys)
+    {
+      gpgme_key_t *k;
+      for (k = signature_keys; *k; k++)
+        gpgme_key_unref (*k);
+      FREE (&signature_keys);   /* __FREE_CHECKED__ */
+    }
+}
+
+/* Append KEY (ownership transferred to the list) to signature_keys. */
+static void signature_keys_add (gpgme_key_t key)
+{
+  size_t n = 0;
+
+  if (signature_keys)
+    while (signature_keys[n])
+      n++;
+  /* room for the new entry plus the NULL terminator */
+  safe_realloc (&signature_keys, sizeof (*signature_keys) * (n + 2));
+  signature_keys[n] = key;
+  signature_keys[n + 1] = NULL;
+}
 
 
 /*
@@ -1699,17 +1731,17 @@ static int show_one_sig_status(gpgme_ctx_t ctx, int idx, STATE *s)
          the current position in the list of signatures, IMHO.
          -moritz.  */
 
+      /* idx == 0 marks the start of processing a new message's
+         signatures, so discard any keys cached from a previous message
+         before we begin accumulating this message's keys. */
+      if (idx == 0)
+        signature_keys_free ();
+
       for (i = 0, sig = result->signatures; sig && (i < idx);
            i++, sig = sig->next)
         ;
       if (! sig)
         return -1;              /* Signature not found.  */
-
-      if (signature_key)
-        {
-          gpgme_key_unref(signature_key);
-          signature_key = NULL;
-        }
 
       fpr = sig->fpr;
       sum = sig->summary;
@@ -1722,8 +1754,7 @@ static int show_one_sig_status(gpgme_ctx_t ctx, int idx, STATE *s)
         err = gpgme_get_key(ctx, fpr, &key, 0); /* secret key?  */
         if (! err)
         {
-          if (! signature_key)
-            signature_key = key;
+          signature_keys_add (key); /* the list now owns this ref */
         }
         else
         {
@@ -1785,8 +1816,9 @@ static int show_one_sig_status(gpgme_ctx_t ctx, int idx, STATE *s)
         anywarn = 1;
       }
 
-      if (key != signature_key)
-        gpgme_key_unref(key);
+      /* Do not unref KEY here: on success it was handed to
+         signature_keys, which owns it and will free it later; on failure
+         it is NULL. */
     }
 
   return anybad ? 1 : anywarn ? 2 : 0;
@@ -1846,11 +1878,7 @@ static int verify_one(BODY *sigbdy, STATE *s,
       int anybad = 0;
       gpgme_verify_result_t verify_result;
 
-      if (signature_key)
-        {
-          gpgme_key_unref(signature_key);
-          signature_key = NULL;
-        }
+      signature_keys_free ();
 
       verify_result = gpgme_op_verify_result(ctx);
       if (verify_result && verify_result->signatures)
@@ -5526,50 +5554,56 @@ static int verify_sender(HEADER *h, gpgme_protocol_t protocol)
 
   if (sender)
   {
-    if (signature_key)
+    if (signature_keys)
     {
-      gpgme_key_t key = signature_key;
-      gpgme_user_id_t uid = NULL;
-      int sender_length = 0;
-      int uid_length = 0;
+      gpgme_key_t *keyp;
+      int sender_length = strlen(sender->mailbox);
 
-      sender_length = strlen(sender->mailbox);
-      for (uid = key->uids; uid && ret; uid = uid->next)
+      /* A message may carry several signatures; accept it if any one of
+         the signing keys has a user ID matching the sender. */
+      for (keyp = signature_keys; *keyp && ret; keyp++)
       {
-        uid_length = strlen(uid->email);
-        if (1
-            && (uid->email[0] == '<')
-            && (uid->email[uid_length - 1] == '>')
-            && (uid_length == sender_length + 2))
-        {
-          const char *at_sign = strchr(uid->email + 1, '@');
-          if (at_sign == NULL)
-          {
-            if (! strncmp(uid->email + 1, sender->mailbox, sender_length))
-              ret = 0;
-          }
-          else
-          {
-            /*
-             * Assume address is 'mailbox@domainname'.
-             * The mailbox part is case-sensitive,
-             * the domainname is not. (RFC 2821)
-             */
-            const char *tmp_email = uid->email + 1;
-            const char *tmp_sender = sender->mailbox;
-            /* length of mailbox part including '@' */
-            int mailbox_length = at_sign - tmp_email + 1;
-            int domainname_length = sender_length - mailbox_length;
-            int mailbox_match, domainname_match;
+        gpgme_key_t key = *keyp;
+        gpgme_user_id_t uid = NULL;
+        int uid_length = 0;
 
-            mailbox_match = (! strncmp(tmp_email, tmp_sender,
-                mailbox_length));
-            tmp_email += mailbox_length;
-            tmp_sender += mailbox_length;
-            domainname_match = (! strncasecmp(tmp_email, tmp_sender,
-                domainname_length));
-            if (mailbox_match && domainname_match)
-              ret = 0;
+        for (uid = key->uids; uid && ret; uid = uid->next)
+        {
+          uid_length = strlen(uid->email);
+          if (1
+              && (uid->email[0] == '<')
+              && (uid->email[uid_length - 1] == '>')
+              && (uid_length == sender_length + 2))
+          {
+            const char *at_sign = strchr(uid->email + 1, '@');
+            if (at_sign == NULL)
+            {
+              if (! strncmp(uid->email + 1, sender->mailbox, sender_length))
+                ret = 0;
+            }
+            else
+            {
+              /*
+               * Assume address is 'mailbox@domainname'.
+               * The mailbox part is case-sensitive,
+               * the domainname is not. (RFC 2821)
+               */
+              const char *tmp_email = uid->email + 1;
+              const char *tmp_sender = sender->mailbox;
+              /* length of mailbox part including '@' */
+              int mailbox_length = at_sign - tmp_email + 1;
+              int domainname_length = sender_length - mailbox_length;
+              int mailbox_match, domainname_match;
+
+              mailbox_match = (! strncmp(tmp_email, tmp_sender,
+                  mailbox_length));
+              tmp_email += mailbox_length;
+              tmp_sender += mailbox_length;
+              domainname_match = (! strncasecmp(tmp_email, tmp_sender,
+                  domainname_length));
+              if (mailbox_match && domainname_match)
+                ret = 0;
+            }
           }
         }
       }
@@ -5580,11 +5614,7 @@ static int verify_sender(HEADER *h, gpgme_protocol_t protocol)
   else
     mutt_any_key_to_continue(_("Failed to figure out sender"));
 
-  if (signature_key)
-  {
-    gpgme_key_unref(signature_key);
-    signature_key = NULL;
-  }
+  signature_keys_free ();
 
   return ret;
 }
