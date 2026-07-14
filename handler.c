@@ -377,53 +377,64 @@ static unsigned char decode_byte(char ch)
 static void mutt_decode_uuencoded(STATE *s, LOFF_T len, int istext, iconv_t cd)
 {
   char tmps[SHORT_STRING];
-  char linelen, c, l, out;
-  char *pt;
+  unsigned char linelen, c, l, out;   /* unsigned: never a negative loop bound */
+  unsigned char *pt;
   char bufi[BUFI_SIZE];
   size_t k = 0;
 
   if (istext)
     state_set_prefix(s);
 
+  /* Skip everything up to and including the "begin" header. */
   while (len > 0)
   {
-    if ((fgets(tmps, sizeof(tmps), s->fpin)) == NULL)
+    if (fgets(tmps, sizeof(tmps), s->fpin) == NULL)
       goto cleanup;
     len -= mutt_strlen(tmps);
-    if ((!mutt_strncmp(tmps, "begin", 5)) && IS_ASCII_WS(tmps[5]))
+    if (mutt_strncmp(tmps, "begin", 5) == 0 && IS_ASCII_WS(tmps[5]))
       break;
   }
+
+  /* Decode data lines until "end" or EOF. */
   while (len > 0)
   {
-    if ((fgets(tmps, sizeof(tmps), s->fpin)) == NULL)
+    if (fgets(tmps, sizeof(tmps), s->fpin) == NULL)
       goto cleanup;
     len -= mutt_strlen(tmps);
-    if (!mutt_strncmp(tmps, "end", 3))
+    if (mutt_strncmp(tmps, "end", 3) == 0)
       break;
-    pt = tmps;
-    linelen = decode_byte(*pt);
+
+    pt = (unsigned char *)tmps;
+    linelen = decode_byte(*pt);   /* 0..63, masked by decode_byte */
     pt++;
+
     for (c = 0; c < linelen && *pt;)
     {
-      for (l = 2; l <= 6 && *pt && *(pt + 1); l += 2)
+      /* Ensure room for one full 3-byte group before decoding it. */
+      if (sizeof(bufi) - k < 3)
+        mutt_convert_to_state(cd, bufi, &k, s);
+
+      /* Backstop: k < sizeof(bufi) prevents any write past the buffer,
+         even if the converter above made no progress (malicious input
+         producing an unterminated multibyte run). */
+      for (l = 2; l <= 6 && *pt && *(pt + 1) && k < sizeof(bufi); l += 2)
       {
         out = decode_byte(*pt) << l;
         pt++;
-        out |= (decode_byte(*pt) >> (6 - l));
+        out |= decode_byte(*pt) >> (6 - l);
         bufi[k++] = out;
-        c++;
-        if (c == linelen)
+        if (++c == linelen)
           break;
       }
       mutt_convert_to_state(cd, bufi, &k, s);
-      pt++;
+      if (*pt)          /* don't step past the NUL terminator */
+        pt++;
     }
   }
 
 cleanup:
   mutt_convert_to_state(cd, bufi, &k, s);
   mutt_convert_to_state(cd, 0, 0, s);
-
   state_reset_prefix(s);
 }
 
