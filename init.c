@@ -626,7 +626,10 @@ static int remove_from_replace_list(REPLACE_LIST **list, const char *pat)
       ++nremoved;
     }
     else
+    {
+      prev = cur;
       cur = cur->next;
+    }
   }
 
   return nremoved;
