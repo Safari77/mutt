@@ -363,7 +363,7 @@ int mutt_builtin_editor(SEND_CONTEXT *sctx)
       while (p >= tmp && IS_ASCII_WS(*p))
         *p-- = 0;
 
-      p = tmp + 2;
+      p = (tmp[0] != '\0' && tmp[1] != '\0') ? tmp + 2 : tmp + 1;
       SKIP_ASCII_WS(p);
 
       switch (tmp[1])
