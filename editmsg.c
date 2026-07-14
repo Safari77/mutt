@@ -202,8 +202,8 @@ static int edit_one_message(CONTEXT *ctx, HEADER *cur)
     fputc('\n', msg->fp);
     rc = mutt_copy_stream(fp, msg->fp);
   }
-
-  rc = mx_commit_message(msg, &tmpctx);
+  if (rc == 0)
+    rc = mx_commit_message(msg, &tmpctx);
   mx_close_message(&tmpctx, &msg);
 
   mx_close_mailbox(&tmpctx, NULL);
