@@ -1893,7 +1893,7 @@ void mutt_FormatString(char *dest,             /* output buffer */
         /* eat the `if' part of the string */
         cp = ifstring;
         count = 0;
-        while (count < sizeof(ifstring) && *src && *src != '?' && *src != '&')
+        while (count < (sizeof(ifstring) - 1) && *src && *src != '?' && *src != '&')
         {
           *cp++ = *src++;
           count++;
