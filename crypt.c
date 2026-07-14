@@ -564,7 +564,7 @@ int mutt_is_application_smime(BODY *m)
   if (!m)
     return 0;
 
-  if ((m->type & TYPEAPPLICATION) && m->subtype)
+  if (m->type == TYPEAPPLICATION && m->subtype)
   {
     /* S/MIME MIME types don't need x- anymore, see RFC2311 */
     if (!ascii_strcasecmp(m->subtype, "x-pkcs7-mime") ||
