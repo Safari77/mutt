@@ -1,0 +1,19 @@
+From taviso  Thu Mar 31 16:53:55 2022
+From: taviso
+Subject: mutt_decode_uuencoded test
+Content-Disposition: inline
+Content-Transfer-Encoding: x-uuencode
+Content-Type: text/plain
+Status: RO
+Content-Length: 186
+Lines: 7
+
+begin 644 test
+<9f>
+M2&5L;&\L"@I)9B!Y;W4@87)E(')E861I;F<@=&AI<R!M97-S86=E(&EN(&UU
+M='0L('1H92!N97AT(&QI;F4*<VAO=6QD(&-O;G1A:6X@9V%R8F%G92X*"@H*
+<9f>
+54&QE87-E(')E<&QY+`I4879I<RX*
+`
+end.
+
