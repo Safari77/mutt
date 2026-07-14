@@ -321,26 +321,25 @@ int mutt_yesorno_with_help(const char *msg, int def, const char *var)
   size_t trunc_msg_len, trunc_help_len;
   int redraw = 1, prompt_lines = 1;
   int show_help_prompt = 0, show_help = 0;
-
 #ifdef HAVE_LANGINFO_YESEXPR
   char *expr;
   regex_t reyes;
   regex_t reno;
   int reyes_ok;
   int reno_ok;
-  char answer[2];
-
-  answer[1] = 0;
-
+  /* answer accumulates a single, possibly multibyte, character since
+   * mutt_getch() returns input one byte at a time. */
+  char answer[MB_LEN_MAX + 1];
+  size_t answer_len = 0;
+  mbstate_t mbstate;
+  memset(&mbstate, 0, sizeof(mbstate));
   reyes_ok = (expr = nl_langinfo(YESEXPR)) && expr[0] == '^' &&
     !REGCOMP(&reyes, expr, REG_NOSUB);
   reno_ok = (expr = nl_langinfo(NOEXPR)) && expr[0] == '^' &&
     !REGCOMP(&reno, expr, REG_NOSUB);
 #endif
-
   if (var)
     show_help_prompt = 1;
-
   /*
    * In order to prevent the default answer to the question to wrapped
    * around the screen in the even the question is wider than the screen,
@@ -354,9 +353,7 @@ int mutt_yesorno_with_help(const char *msg, int def, const char *var)
                      def == MUTT_YES ? no : yes,
                      show_help_prompt ? "/?" : "");
   answer_string_wid = mutt_strwidth(mutt_b2s(answer_buffer));
-
   msg_wid = mutt_strwidth(msg);
-
   FOREVER
   {
     if (redraw || SigWinch)
@@ -379,21 +376,17 @@ int mutt_yesorno_with_help(const char *msg, int def, const char *var)
       }
       else
         prompt_lines = 1;
-
       /* maxlen here is sort of arbitrary, so pick a reasonable upper bound */
       trunc_msg_len = mutt_wstr_trunc(msg, 4 * prompt_lines * MuttMessageWindow->cols,
                                       prompt_lines * MuttMessageWindow->cols - answer_string_wid,
                                       NULL);
-
       if (show_help)
         prompt_lines += 1;
-
       if (prompt_lines != MuttMessageWindow->rows)
       {
         reflow_message_window_rows(prompt_lines);
         mutt_current_menu_redraw();
       }
-
       mutt_window_move(MuttMessageWindow, 0, 0);
       SETCOLOR(MT_COLOR_PROMPT);
       if (show_help)
@@ -410,7 +403,6 @@ int mutt_yesorno_with_help(const char *msg, int def, const char *var)
       NORMAL_COLOR;
       mutt_window_clrtoeol(MuttMessageWindow);
     }
-
     mutt_refresh();
     /* SigWinch is not processed unless timeout is set */
     mutt_getch_timeout(30 * 1000);
@@ -425,9 +417,31 @@ int mutt_yesorno_with_help(const char *msg, int def, const char *var)
       def = -1;
       break;
     }
-
 #ifdef HAVE_LANGINFO_YESEXPR
-    answer[0] = ch.ch;
+    if (reyes_ok || reno_ok)
+    {
+      size_t nb;
+
+      /* A multibyte character arrives one byte per keypress; buffer bytes
+       * until a complete character is formed before matching the regexp. */
+      if (answer_len >= sizeof(answer) - 1)
+      {
+        /* Overlong sequence (shouldn't happen for valid encodings); reset. */
+        answer_len = 0;
+        memset(&mbstate, 0, sizeof(mbstate));
+        BEEP();
+        continue;
+      }
+      answer[answer_len++] = ch.ch;
+      answer[answer_len] = 0;
+
+      nb = mbrtowc(NULL, &answer[answer_len - 1], 1, &mbstate);
+      if (nb == (size_t)(-2))
+        continue;                              /* incomplete char, read more bytes */
+      if (nb == (size_t)(-1))
+        memset(&mbstate, 0, sizeof(mbstate));  /* invalid sequence, reset shift state */
+      answer_len = 0;                          /* char complete; answer[] stays NUL-terminated */
+    }
     if (reyes_ok ?
         (regexec(& reyes, answer, 0, 0, 0) == 0) :
 #else
@@ -453,22 +467,18 @@ int mutt_yesorno_with_help(const char *msg, int def, const char *var)
       show_help_prompt = 0;
       show_help = 1;
       redraw = 1;
-
       mutt_buffer_printf(answer_buffer,
                          " ([%s]/%s): ",
                          def == MUTT_YES ? yes : no,
                          def == MUTT_YES ? no : yes);
       answer_string_wid = mutt_strwidth(mutt_b2s(answer_buffer));
-
       help_buffer = mutt_buffer_pool_get();
       /* L10N:
          In the mutt_yesorno() prompt, some variables and all
          quadoptions provide a '?' choice to provide the name of the
          configuration variable this prompt is dependent on.
-
          For example, the prompt "Quit Mutt?" is dependent on the
          quadoption $quit.
-
          Typing '?' at those prompts will print this message above
          the prompt, where %s is the name of the configuration
          variable.
@@ -480,17 +490,14 @@ int mutt_yesorno_with_help(const char *msg, int def, const char *var)
       BEEP();
     }
   }
-
   mutt_buffer_pool_release(&answer_buffer);
   mutt_buffer_pool_release(&help_buffer);
-
 #ifdef HAVE_LANGINFO_YESEXPR
   if (reyes_ok)
     regfree(& reyes);
   if (reno_ok)
     regfree(& reno);
 #endif
-
   if (MuttMessageWindow->rows != 1)
   {
     reflow_message_window_rows(1);
@@ -498,7 +505,6 @@ int mutt_yesorno_with_help(const char *msg, int def, const char *var)
   }
   else
     mutt_window_clearline(MuttMessageWindow, 0);
-
   if (def != -1)
   {
     mutt_window_mvaddstr(MuttMessageWindow, 0, 0,
