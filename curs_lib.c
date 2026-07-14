@@ -422,6 +422,15 @@ int mutt_yesorno_with_help(const char *msg, int def, const char *var)
     {
       size_t nb;
 
+      /* Special/function keys (KEY_*) arrive as values above 0xFF and are not
+       * input bytes; drop any partial character and reject them. */
+      if (ch.ch > 0xFF)
+      {
+        answer_len = 0;
+        memset(&mbstate, 0, sizeof(mbstate));
+        BEEP();
+        continue;
+      }
       /* A multibyte character arrives one byte per keypress; buffer bytes
        * until a complete character is formed before matching the regexp. */
       if (answer_len >= sizeof(answer) - 1)
