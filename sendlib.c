@@ -2668,6 +2668,8 @@ send_msg(const char *path, char **args, const char *msg, char **tempfile)
      */
     if (SendmailWait > 0)
     {
+      sigset_t wait_set;
+
       SigAlrm = 0;
       act.sa_handler = alarm_handler;
 #ifdef SA_INTERRUPT
@@ -2678,34 +2680,76 @@ send_msg(const char *path, char **args, const char *msg, char **tempfile)
 #endif
       sigemptyset(&act.sa_mask);
       sigaction(SIGALRM, &act, &oldalrm);
+
+      /* Block SIGALRM and SIGCHLD before scheduling alarm() to prevent the race condition */
+      sigemptyset(&wait_set);
+      sigaddset(&wait_set, SIGALRM);
+      sigaddset(&wait_set, SIGCHLD);
+      sigprocmask(SIG_BLOCK, &wait_set, NULL);
+
       alarm(SendmailWait);
+
+      while (1)
+      {
+        pid_t res = waitpid(pid, &st, WNOHANG);
+        if (res > 0)
+        {
+          st = WIFEXITED(st) ? WEXITSTATUS(st) : S_ERR;
+          if (st == (0xff & EX_OK) && tempfile && *tempfile)
+          {
+            unlink(*tempfile); /* no longer needed */
+            FREE(tempfile);                /* __FREE_CHECKED__ */
+          }
+          break;
+        }
+        else if (res < 0 && errno != ECHILD && errno != EINTR)
+        {
+          st = S_ERR;
+          break;
+        }
+
+        if (SigAlrm)
+        {
+          st = S_BKG;
+          if (tempfile && *tempfile)
+          {
+            unlink(*tempfile);
+            FREE(tempfile);                /* __FREE_CHECKED__ */
+          }
+          break;
+        }
+
+        /* Safely await the child state changes using sigwaitinfo instead of a naked waitpid */
+        siginfo_t info;
+        sigwaitinfo(&wait_set, &info);
+
+        /* When blocked, sigwaitinfo intercepts the signal without invoking the handler */
+        if (info.si_signo == SIGALRM)
+        {
+          SigAlrm = 1;
+        }
+      }
+
+      /* reset alarm; not really needed, but... */
+      alarm(0);
+      sigaction(SIGALRM, &oldalrm, NULL);
+      sigprocmask(SIG_UNBLOCK, &wait_set, NULL);
     }
     else if (SendmailWait < 0)
-      _exit(0xff & EX_OK);
-
-    if (waitpid(pid, &st, 0) > 0)
     {
-      st = WIFEXITED(st) ? WEXITSTATUS(st) : S_ERR;
-      if (SendmailWait && st == (0xff & EX_OK) && tempfile && *tempfile)
-      {
-        unlink(*tempfile); /* no longer needed */
-        FREE(tempfile);                /* __FREE_CHECKED__ */
-      }
+      _exit(0xff & EX_OK);
     }
     else
     {
-      st = (SendmailWait > 0 && errno == EINTR && SigAlrm) ?
-        S_BKG : S_ERR;
-      if (SendmailWait > 0 && tempfile && *tempfile)
+      if (waitpid(pid, &st, 0) > 0)
       {
-        unlink(*tempfile);
-        FREE(tempfile);                /* __FREE_CHECKED__ */
+        st = WIFEXITED(st) ? WEXITSTATUS(st) : S_ERR;
+      }
+      else
+      {
+        st = S_ERR;
       }
     }
-
-    /* reset alarm; not really needed, but... */
-    alarm(0);
-    sigaction(SIGALRM, &oldalrm, NULL);
 
     if (kill(ppid, 0) == -1 && errno == ESRCH && tempfile && *tempfile)
     {
