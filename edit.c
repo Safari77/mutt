@@ -498,7 +498,8 @@ int mutt_builtin_editor(SEND_CONTEXT *sctx)
       safe_strcat(tmp, sizeof(tmp), "\n");
       if (buflen == bufmax)
         safe_realloc(&buf, sizeof(char *) * (bufmax += 25));
-      buf[buflen++] = safe_strdup(tmp[1] == '~' ? tmp + 1 : tmp);
+      buf[buflen++] = safe_strdup((EscChar && tmp[0] == EscChar[0]
+                                   && tmp[1] == EscChar[0]) ? tmp + 1 : tmp);
     }
 
     tmp[0] = 0;
