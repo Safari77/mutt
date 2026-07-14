@@ -195,6 +195,13 @@ int mutt_compose_attachment(BODY *a)
         }
       }
     }
+    else
+    {
+      /* Missing command handlers in the valid mailcap entry */
+      mutt_error(_("Mailcap entry for %s lacks a compose command."), type);
+      rc = 0;
+      goto bailout;
+    }
   }
   else
   {
