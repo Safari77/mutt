@@ -569,7 +569,7 @@ static int search_history(char *search_buf, history_class_t hclass, char **match
       cur = HistSize;
     if (cur == h->last)
       break;
-    if (mutt_stristr(h->hist[cur], search_buf))
+    if (h->hist[cur] && mutt_stristr(h->hist[cur], search_buf))
       matches[match_count++] = h->hist[cur];
   } while (match_count < HistSize);
 
