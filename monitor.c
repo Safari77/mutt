@@ -206,7 +206,7 @@ static int monitor_handle_ignore(int descr)
         mutt_errno_dbg(2, "monitor: inotify_add_watch failed for '%s'", iter->mh_backup_path);
       else
       {
-        muttdbg(3, "monitor: inotify_add_watch descriptor=%d for '%s'", descr, iter->mh_backup_path);
+        muttdbg(3, "monitor: inotify_add_watch descriptor=%d for '%s'", new_descr, iter->mh_backup_path);
         iter->st_dev = sb.st_dev;
         iter->st_ino = sb.st_ino;
         iter->descr = new_descr;
