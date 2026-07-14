@@ -61,19 +61,18 @@ static BUFFY *buffy_get(const char *path);
 
 /* Find the last message in the file.
  * upon success return 0. If no message found - return -1 */
-
 static int fseek_last_message(FILE * f)
 {
   LOFF_T pos;
   char buffer[BUFSIZ + 7];      /* 7 for "\n\nFrom " */
   int bytes_read;
   int i;                        /* Index into `buffer' for scanning.  */
-
   memset(buffer, 0, sizeof(buffer));
-  fseek(f, 0, SEEK_END);
-  pos = ftello(f);
-
-  /* Set `bytes_read' to the size of the last, probably partial, buffer; 0 <
+  if (fseek(f, 0, SEEK_END) != 0)
+    return -1;
+  if ((pos = ftello(f)) < 0)
+    return -1;
+  /* Set `bytes_read' to the size of the last, probably partial, buffer; 0
    * `bytes_read' <= `BUFSIZ'.  */
   bytes_read = pos % BUFSIZ;
   if (bytes_read == 0)
@@ -84,26 +83,28 @@ static int fseek_last_message(FILE * f)
   {
     /* we save in the buffer at the end the first 7 chars from the last read */
     memcpy(buffer + BUFSIZ, buffer, 7);
-    fseeko(f, pos, SEEK_SET);
-    bytes_read = fread(buffer, sizeof(char), bytes_read, f);
-    if (bytes_read == -1)
+    if (fseeko(f, pos, SEEK_SET) != 0)
+      return -1;
+    /* a short read here means an I/O error: every read is fully inside the
+     * file by construction, so anything less than requested is a failure */
+    if (fread(buffer, sizeof(char), bytes_read, f) != (size_t) bytes_read)
       return -1;
     for (i = bytes_read; --i >= 0;)
       if (!mutt_strncmp(buffer + i, "\n\nFrom ", 7))
       {                         /* found it - go to the beginning of the From */
-        fseeko(f, pos + i + 2, SEEK_SET);
+        if (fseeko(f, pos + i + 2, SEEK_SET) != 0)
+          return -1;
         return 0;
       }
     bytes_read = BUFSIZ;
   }
-
   /* here we are at the beginning of the file */
   if (!mutt_strncmp("From ", buffer, 5))
   {
-    fseek(f, 0, SEEK_SET);
+    if (fseek(f, 0, SEEK_SET) != 0)
+      return -1;
     return (0);
   }
-
   return (-1);
 }
 
