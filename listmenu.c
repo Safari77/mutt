@@ -70,7 +70,7 @@ static const struct mapping_t ListActions[] =
 struct menu_data
 {
   struct list_headers *lhdrs;
-  char fmt[12];
+  char fmt[64];
   int num;
 };
 
