@@ -946,7 +946,7 @@ time_t mutt_parse_date(const char *s, HEADER *h)
     switch (count)
     {
       case 0: /* day of the month */
-        if (mutt_atoi(t, &tm.tm_mday, 0) < 0 || tm.tm_mday < 0)
+        if (mutt_atoi(t, &tm.tm_mday, 0) < 0 || tm.tm_mday <= 0 || tm.tm_mday > 31)
           return (-1);
         if (tm.tm_mday > 31)
           return (-1);
@@ -977,6 +977,8 @@ time_t mutt_parse_date(const char *s, HEADER *h)
           muttdbg(1, "parse_date: could not process time format: %s", t);
           return(-1);
         }
+        if (hour < 0 || hour > 23 || min < 0 || min > 59 || sec < 0 || sec > 60)
+          return (-1);
         tm.tm_hour = hour;
         tm.tm_min = min;
         tm.tm_sec = sec;
