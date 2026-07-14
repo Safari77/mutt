@@ -96,7 +96,11 @@ static int read_list(BUFFER *list, BUFFER *line)
     }
     else if (ch == '`' && (!quotechar || quotechar == '"'))
     {
-      read_backticks(list, line);
+      /* Catch unclosed backticks failure immediately and abort */
+      if (read_backticks(list, line) != 0)
+      {
+        return -1;
+      }
       continue;
     }
     else if (!quotechar)
