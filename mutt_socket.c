@@ -402,6 +402,7 @@ static int socket_connect(int fd, struct sockaddr *sa)
     return -1;
   }
 
+  unsigned int old_alarm = 0;
   /* Batch mode does not call mutt_signal_init(), so ensure the alarm
    * interrupts the connect call */
   if (ConnectTimeout > 0)
@@ -415,7 +416,7 @@ static int socket_connect(int fd, struct sockaddr *sa)
     sigemptyset(&act.sa_mask);
     sigaction(SIGALRM, &act, &oldalrm);
 
-    alarm(ConnectTimeout);
+    old_alarm = alarm(ConnectTimeout);
   }
 
   mutt_allow_interrupt(1);
@@ -451,7 +452,7 @@ static int socket_connect(int fd, struct sockaddr *sa)
 
   if (ConnectTimeout > 0)
   {
-    alarm(0);
+    alarm(old_alarm);
     sigaction(SIGALRM, &oldalrm, NULL);
   }
   mutt_allow_interrupt(0);
