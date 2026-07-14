@@ -456,7 +456,7 @@ int mutt_write_mime_header(BODY *a, FILE *f)
 
 int mutt_write_mime_body(BODY *a, FILE *f)
 {
-  char *p, boundary[SHORT_STRING];
+  char *p;
   char send_charset[SHORT_STRING];
   FILE *fpin;
   BODY *t;
@@ -471,11 +471,10 @@ int mutt_write_mime_body(BODY *a, FILE *f)
       mutt_error _("No boundary parameter found! [report this error]");
       return (-1);
     }
-    strfcpy(boundary, p, sizeof(boundary));
 
     for (t = a->parts; t ; t = t->next)
     {
-      fprintf(f, "--%s\n", boundary);
+      fprintf(f, "--%s\n", p);
       if (mutt_write_mime_header(t, f) == -1)
         return -1;
       fputc('\n', f);
@@ -500,7 +499,7 @@ int mutt_write_mime_body(BODY *a, FILE *f)
       if (t->next)
         fputc('\n', f);
     }
-    fprintf(f, "\n--%s--\n", boundary);
+    fprintf(f, "\n--%s--\n", p);
     return (ferror(f) ? -1 : 0);
   }
 
