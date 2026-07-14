@@ -734,11 +734,11 @@ hdr_format_str(char *dest,
         i = 1;  /* reduce reuse recycle */
         htmp = NULL;
         if (flags & MUTT_FORMAT_TREE
-            && (hdr->thread->prev && hdr->thread->prev->message
+            && (hdr->thread && hdr->thread->prev && hdr->thread->prev->message
                 && hdr->thread->prev->message->env->x_label))
           htmp = hdr->thread->prev->message;
         else if (flags & MUTT_FORMAT_TREE
-                 && (hdr->thread->parent && hdr->thread->parent->message
+                 && (hdr->thread && hdr->thread->parent && hdr->thread->parent->message
                      && hdr->thread->parent->message->env->x_label))
           htmp = hdr->thread->parent->message;
         if (htmp && mutt_strcasecmp(hdr->env->x_label,
