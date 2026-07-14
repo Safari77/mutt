@@ -3698,8 +3698,9 @@ parse_dn_part(struct dn_array_s *array, const unsigned char *string)
   if (*string == '#')
     { /* hexstring */
       string++;
-      for (s=string; hexdigitp(s); s++)
-        s++;
+      for (s=string; hexdigitp(s); s++) {
+        // one at a time
+      }
       n = s - string;
       if (!n || (n & 1))
         return NULL; /* empty or odd number of digits */
