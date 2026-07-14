@@ -1186,6 +1186,8 @@ static void maildir_delayed_parsing(CONTEXT * ctx, struct maildir **md,
       mutt_progress_update(progress, count, -1);
 
     DO_SORT();
+    if (!p)
+      break;
 
     mutt_buffer_printf(fn, "%s/%s", ctx->path, p->h->path);
 
