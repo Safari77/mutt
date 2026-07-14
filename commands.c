@@ -426,7 +426,7 @@ void ci_bounce_message(HEADER *h)
   snprintf(scratch, sizeof(scratch),
            (h ? _("Bounce message to %s") : _("Bounce messages to %s")), buf);
 
-  if (mutt_strwidth(prompt) > MuttMessageWindow->cols - extra_space)
+  if (mutt_strwidth(scratch) > MuttMessageWindow->cols - extra_space)
   {
     mutt_format_string(prompt, sizeof(prompt),
                        0, MuttMessageWindow->cols-extra_space, FMT_LEFT, 0,
