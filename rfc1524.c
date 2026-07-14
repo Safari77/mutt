@@ -610,36 +610,46 @@ void mutt_rfc1524_expand_filename(const char *nametemplate,
  * then we need to rename the existing file.
  *
  * This function returns 0 on successful move, 1 on old file doesn't exist,
- * 2 on new file already exists, and 3 on other failure.
+ * and 2 on other failure.
  */
 
 /* note on access(2) use: No dangling symlink problems here due to
  * safe_fopen().
  */
-
 int mutt_rename_file(const char *oldfile, const char *newfile)
 {
   FILE *ofp, *nfp;
   int rc = 0;
 
-  if (access(oldfile, F_OK) != 0)
+  if ((ofp = fopen(oldfile, "r")) == NULL)
     return 1;
-  if ((ofp = fopen(oldfile,"r")) == NULL)
-    return 3;
-  if ((nfp = safe_fopen(newfile,"w")) == NULL)
+
+  if ((nfp = safe_fopen(newfile, "w")) == NULL)
   {
     safe_fclose(&ofp);
-    return 3;
-  }
-  if (mutt_copy_stream(ofp,nfp) != 0) {
-    rc = 3;
-    goto bail;
+    return 2;
   }
 
-  mutt_unlink(oldfile);
+  /* Copy the stream, force a flush, and check for any stream errors */
+  if (mutt_copy_stream(ofp, nfp) != 0 || ferror(nfp))
+  {
+    rc = 2;
+  }
 
-bail:
-  safe_fclose(&nfp);
+  /* Close files BEFORE unlinking so we guarantee all data is safely on disk */
+  if (safe_fclose(&nfp) != 0)
+    rc = 2;
   safe_fclose(&ofp);
+
+  /* Only destroy the original if the entire write and flush process succeeded */
+  if (rc == 0)
+  {
+    mutt_unlink(oldfile);
+  }
+  else
+  {
+    mutt_unlink(newfile);
+  }
+
   return rc;
 }
