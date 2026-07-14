@@ -106,7 +106,7 @@ int mutt_parse_hook(BUFFER *buf, BUFFER *s, union pointer_long_t udata, BUFFER *
 
     /* Accidentally using the ^ mailbox shortcut in the .muttrc is a
      * common mistake */
-    if ((*(pattern->data) == '^') && (!CurrentFolder))
+    if (mutt_buffer_len(pattern) && (*(pattern->data) == '^') && (!CurrentFolder))
     {
       strfcpy(err->data, _("current mailbox shortcut '^' is unset"), err->dsize);
       goto cleanup;
