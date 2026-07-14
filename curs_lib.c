@@ -50,10 +50,10 @@
 struct error_history
 {
   char **msg;
-  short last;
+  size_t last;
 } ErrorHistory = {0, 0};
 
-static short OldErrorHistSize = 0;
+static size_t OldErrorHistSize = 0;
 
 
 /* not possible to unget more than one char under some curses libs, and it
@@ -546,7 +546,7 @@ void mutt_query_exit(void)
 
 void mutt_error_history_init(void)
 {
-  short i;
+  size_t i;
 
   if (OldErrorHistSize && ErrorHistory.msg)
   {
@@ -579,7 +579,7 @@ static void error_history_add(const char *s)
 
 static void error_history_dump(FILE *f)
 {
-  short cur;
+  size_t cur;
 
   cur = ErrorHistory.last;
   do

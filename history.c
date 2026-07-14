@@ -67,8 +67,8 @@
 struct history
 {
   char **hist;
-  short cur;
-  short last;
+  size_t cur;
+  size_t last;
 };
 
 static const struct mapping_t HistoryHelp[] = {
@@ -332,7 +332,7 @@ static void save_history(history_class_t hclass, const char *s)
  */
 static void remove_history_dups(history_class_t hclass, const char *s)
 {
-  int source, dest, old_last;
+  size_t source, dest, old_last;
   struct history *h = GET_HISTORY(hclass);
 
   if (!HistSize || !h)

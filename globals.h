@@ -230,8 +230,8 @@ extern unsigned char QuadOptions[];
 #endif
 
 WHERE short ConnectTimeout;
-WHERE short ErrorHistSize;
-WHERE short HistSize;
+WHERE size_t ErrorHistSize;
+WHERE size_t HistSize;
 WHERE short MenuContext;
 WHERE short PagerContext;
 WHERE short PagerIndexLines;
