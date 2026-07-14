@@ -64,23 +64,24 @@ static void mutt_group_remove(group_t *g)
   FREE(&g);
 }
 
-int mutt_group_context_clear(group_context_t **ctx)
-{
-  group_context_t *t;
-  for ( ; ctx && *ctx; (*ctx) = t)
-  {
-    mutt_group_remove((*ctx)->g);
-    t = (*ctx)->next;
-    FREE(ctx);                          /* __FREE_CHECKED__ */
-  }
-  return 0;
-}
-
 static int empty_group(group_t *g)
 {
   if (!g)
     return -1;
   return !g->as && !g->rs;
+}
+
+int mutt_group_context_clear(group_context_t **ctx)
+{
+  group_context_t *t;
+  for ( ; ctx && *ctx; (*ctx) = t)
+  {
+    if (empty_group((*ctx)->g))
+      mutt_group_remove((*ctx)->g);
+    t = (*ctx)->next;
+    FREE(ctx);                          /* __FREE_CHECKED__ */
+  }
+  return 0;
 }
 
 void mutt_group_context_add(group_context_t **ctx, group_t *group)
