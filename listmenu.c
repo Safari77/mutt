@@ -230,6 +230,7 @@ static int list_action(CONTEXT *ctx, struct list_headers *lhdrs,
   {
     /* L10N: given when mailto: URI was unparsable while trying to execute it */
     mutt_error(_("Could not parse mailto: URI."));
+    mutt_free_header(&newmsg);
     return 1;
   }
 
