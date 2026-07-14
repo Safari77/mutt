@@ -210,7 +210,9 @@ int mutt_wait_interactive_filter(pid_t pid)
   int rc;
 
 #ifndef USE_IMAP
-  waitpid(pid, &rc, 0);
+  while (waitpid(pid, &rc, 0) == -1 && errno == EINTR) {
+     ;
+  }
 #else
   rc = imap_wait_keepalive(pid);
 #endif
