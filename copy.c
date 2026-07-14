@@ -953,6 +953,7 @@ static void format_address_header(char **h, ADDRESS *a)
   buflen  = linelen + 3;
 
   safe_realloc(h, buflen);
+  p = *h;
   for (count = 0; a; a = a->next, count++)
   {
     ADDRESS *tmp = a->next;
