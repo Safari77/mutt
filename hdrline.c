@@ -366,6 +366,16 @@ hdr_format_str(char *dest,
         if (*cp == '%')
         {
           cp++;
+          /* Check for null terminator immediately to prevent out-of-bounds read */
+          if (*cp == '\0')
+          {
+            if (len >= 1)
+            {
+              *p++ = '%';
+              len -= 1;
+            }
+            break;
+          }
           if ((*cp == 'Z' || *cp == 'z') && (op == 'd' || op == '{'))
           {
             if (len >= 5)
