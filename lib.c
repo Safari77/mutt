@@ -126,7 +126,7 @@ void *safe_calloc(size_t nmemb, size_t size)
   if (!nmemb || !size)
     return NULL;
 
-  if (((size_t) -1) / nmemb <= size)
+  if (((size_t) -1) / nmemb < size)
   {
     mutt_error _("Integer overflow -- can't allocate memory!");
     sleep(1);
