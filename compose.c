@@ -625,6 +625,8 @@ static int delete_attachment(ATTACH_CONTEXT *actx, int x)
   ATTACHPTR **idx = actx->idx;
   int rindex = actx->v2r[x];
   int y;
+  BODY *parent = NULL;
+  BODY *prev = NULL;
 
   if (rindex == 0 && actx->idxlen == 1)
   {
@@ -651,14 +653,25 @@ static int delete_attachment(ATTACH_CONTEXT *actx, int x)
   if (idx[rindex]->unowned)
     idx[rindex]->content->unlink = 0;
 
-  for (y = 0; y < actx->idxlen; y++)
+  /* Safely track the preceding sibling and parent to prevent dangling pointers */
+  for (y = 0; y < rindex; y++)
   {
+    if (idx[y]->content->parts == idx[rindex]->content)
+      parent = idx[y]->content;
+
     if (idx[y]->content->next == idx[rindex]->content)
     {
-      idx[y]->content->next = idx[rindex]->content->next;
+      prev = idx[y]->content;
       break;
     }
   }
+
+  if (prev)
+    prev->next = idx[rindex]->content->next;
+  else if (rindex == 0)
+    actx->hdr->content = idx[rindex]->content->next;
+  else if (parent)
+    parent->parts = idx[rindex]->content->next;
 
   idx[rindex]->content->next = NULL;
   /* mutt_make_message_attach() creates body->parts, shared by
