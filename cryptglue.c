@@ -295,7 +295,7 @@ BODY *crypt_pgp_encrypt_message(HEADER *msg, BODY *a, char *keylist, int sign)
   BODY *result;
   int opt_was_set = option(OPTAUTOCRYPTGPGME);
 
-  if (msg->security & AUTOCRYPT)
+  if (msg && msg->security & AUTOCRYPT)
   {
     if (mutt_autocrypt_set_sign_as_default_key(msg))
       return NULL;
