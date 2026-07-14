@@ -242,12 +242,36 @@ void mutt_set_langinfo_charset(void)
 void mutt_canonical_charset(char *dest, size_t dlen, const char *name)
 {
   size_t i;
-  char *p, *ext;
+  char *p;
+  const char *ext;
   char in[LONG_STRING], scratch[LONG_STRING+10];
+  size_t baselen;
 
-  strfcpy(in, name, sizeof(in));
-  if ((ext = strchr(in, '/')))
-    *ext++ = 0;
+  if (!dest || dlen == 0 || !name)
+    return;
+
+  /* Find extension on the original string to avoid truncation issues */
+  ext = strchr(name, '/');
+  if (ext)
+  {
+    baselen = (size_t)(ext - name);
+    if (baselen >= sizeof(in))
+      baselen = sizeof(in) - 1;
+  }
+  else
+  {
+    baselen = strlen(name);
+    if (baselen >= sizeof(in))
+      baselen = sizeof(in) - 1;
+  }
+
+  /* Copy base name and null-terminate */
+  memcpy(in, name, baselen);
+  in[baselen] = '\0';
+
+  /* Advance past the '/' for the extension */
+  if (ext && *ext == '/')
+    ext++;
 
   if (!ascii_strcasecmp(in, "utf-8") || !ascii_strcasecmp(in, "utf8"))
   {
@@ -257,7 +281,7 @@ void mutt_canonical_charset(char *dest, size_t dlen, const char *name)
 
   /* catch some common iso-8859-something misspellings */
   if (!ascii_strncasecmp(in, "8859", 4) && in[4] != '-')
-    snprintf(scratch, sizeof(scratch), "iso-8859-%s", in +4);
+    snprintf(scratch, sizeof(scratch), "iso-8859-%s", in + 4);
   else if (!ascii_strncasecmp(in, "8859-", 5))
     snprintf(scratch, sizeof(scratch), "iso-8859-%s", in + 5);
   else if (!ascii_strncasecmp(in, "iso8859", 7) && in[7] != '-')
@@ -268,12 +292,14 @@ void mutt_canonical_charset(char *dest, size_t dlen, const char *name)
     strfcpy(scratch, in, sizeof(scratch));
 
   for (i = 0; PreferredMIMENames[i].key; i++)
+  {
     if (!ascii_strcasecmp(scratch, PreferredMIMENames[i].key) ||
         !mutt_strcasecmp(scratch, PreferredMIMENames[i].key))
     {
       strfcpy(dest, PreferredMIMENames[i].pref, dlen);
       goto out;
     }
+  }
 
   strfcpy(dest, scratch, dlen);
 
@@ -282,10 +308,14 @@ void mutt_canonical_charset(char *dest, size_t dlen, const char *name)
     *p = ascii_tolower(*p);
 
 out:
+  /* Safely append the extension if present, verifying remaining destination bounds */
   if (ext && *ext)
   {
-    safe_strcat(dest, dlen, "/");
-    safe_strcat(dest, dlen, ext);
+    size_t current_len = strlen(dest);
+    if (current_len + 1 < dlen)
+    {
+      snprintf(dest + current_len, dlen - current_len, "/%s", ext);
+    }
   }
 }
 
