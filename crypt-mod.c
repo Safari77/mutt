@@ -40,6 +40,8 @@ void crypto_module_register(crypt_module_specs_t specs)
 
   module_new->specs = specs;
   module_new->next = modules;
+  module_new->prevp = &modules;
+
   if (modules)
     modules->prevp = &module_new->next;
   modules = module_new;
