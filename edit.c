@@ -441,9 +441,12 @@ int mutt_builtin_editor(SEND_CONTEXT *sctx)
         case 'u':
           if (buflen)
           {
+            size_t tmplen;
             buflen--;
             strfcpy(tmp, buf[buflen], sizeof(tmp));
-            tmp[mutt_strlen(tmp)-1] = 0;
+            tmplen = mutt_strlen(tmp);
+            if (tmplen > 0)
+              tmp[tmplen-1] = 0;
             FREE(&buf[buflen]);
             buf[buflen] = NULL;
             continue;
