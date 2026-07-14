@@ -270,6 +270,7 @@ static void delete_hook(HOOK *h)
   if (h->rx.rx)
   {
     regfree(h->rx.rx);
+    FREE(&h->rx.rx);
   }
   mutt_pattern_free(&h->pattern);
   FREE(&h);
@@ -278,27 +279,21 @@ static void delete_hook(HOOK *h)
 /* Deletes all hooks of type ``type'', or all defined hooks if ``type'' is 0 */
 static void delete_hooks(int type)
 {
+  HOOK **ptr = &Hooks;
   HOOK *h;
-  HOOK *prev;
 
-  while (h = Hooks, h && (type == 0 || type == h->type))
+  while (*ptr)
   {
-    Hooks = h->next;
-    delete_hook(h);
-  }
-
-  prev = h; /* Unused assignment to avoid compiler warnings */
-
-  while (h)
-  {
-    if (type == h->type)
+    if (type == 0 || type == (*ptr)->type)
     {
-      prev->next = h->next;
+      h = *ptr;
+      *ptr = h->next;
       delete_hook(h);
     }
     else
-      prev = h;
-    h = prev->next;
+    {
+      ptr = &(*ptr)->next;
+    }
   }
 }
 
