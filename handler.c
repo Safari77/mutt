@@ -794,9 +794,11 @@ static int text_enriched_handler(BODY *a, STATE *s)
   stte.s = s;
   stte.WrapMargin = ((s->flags & MUTT_DISPLAY) ? (MuttIndexWindow->cols-4) :
                      ((MuttIndexWindow->cols-4)<72)?(MuttIndexWindow->cols-4):72);
+  if (stte.WrapMargin < 10)
+    stte.WrapMargin = 10;
   stte.line_max = stte.WrapMargin * 4;
-  stte.line = (wchar_t *) safe_calloc(1, (stte.line_max + 1) * sizeof(wchar_t));
-  stte.param = (wchar_t *) safe_calloc(1, (STRING) * sizeof(wchar_t));
+  stte.line = (wchar_t *) safe_calloc((stte.line_max + 1), sizeof(wchar_t));
+  stte.param = (wchar_t *) safe_calloc(STRING, sizeof(wchar_t));
 
   stte.param_len = STRING;
   stte.param_used = 0;
