@@ -1015,8 +1015,10 @@ void _mutt_buffer_select_file(BUFFER *f, int flags, char ***files, int *numfiles
             {
               size_t workingdirlen = mutt_buffer_len(working_dir);
 
-              if ((workingdirlen > 1) &&
-                  mutt_strcmp("..", mutt_b2s(working_dir) + workingdirlen - 2) == 0)
+              /* Ensure we are matching exactly ".." or a directory component like "/.." */
+              if ((workingdirlen >= 2) &&
+                  mutt_strcmp("..", mutt_b2s(working_dir) + workingdirlen - 2) == 0 &&
+                  (workingdirlen == 2 || mutt_b2s(working_dir)[workingdirlen - 3] == '/'))
               {
                 mutt_buffer_addstr(working_dir, "/..");
               }
