@@ -352,7 +352,7 @@ const char *mutt_addr_for_display(ADDRESS *a)
 
   FREE(&buff);
 
-  if (!a->mailbox || addr_is_local(a))
+  if (!a || !a->mailbox || addr_is_local(a))
     return a->mailbox;
 
   if (mbox_to_udomain(a->mailbox, &user, &domain) == -1)
