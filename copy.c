@@ -813,7 +813,7 @@ _mutt_append_message(CONTEXT *dest, FILE *fpin, CONTEXT *src, HEADER *hdr,
   /* Partial decode is still an error. */
   if (r != 0)
     r = -1;
-  if (mx_commit_message(msg, dest) != 0)
+  else if (mx_commit_message(msg, dest) != 0)
     r = -1;
 
   mx_close_message(dest, &msg);
