@@ -189,13 +189,22 @@ static void print_enriched_string(COLOR_ATTR base_color, unsigned char *s,
       }
       ATTRSET(base_color);
     }
-    else if ((k = mbrtowc(&wc, (char *)s, n, &mbstate)) > 0)
-    {
-      addnstr((char *)s, k);
-      s += k, n-= k;
-    }
     else
-      break;
+    {
+      k = mbrtowc(&wc, (char *)s, n, &mbstate);
+      if (k == (size_t)(-1) || k == (size_t)(-2))
+      {
+        if (k == (size_t)(-1))
+          memset(&mbstate, 0, sizeof(mbstate));
+        k = 1; /* Skip the invalid/incomplete byte */
+      }
+
+      if (k == 0)
+        break;
+
+      addnstr((char *)s, k);
+      s += k, n -= k;
+    }
   }
 }
 
