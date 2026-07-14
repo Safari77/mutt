@@ -867,10 +867,11 @@ mutt_move_message (CONTEXT *dest, CONTEXT *src, HEADER *hdr)
     struct stat st;
 
     /* NFS sanity check */
-    if (stat(fndest, &st) == -1)
+    if ((stat(fndest, &st) == -1) || ((st.st_mode & S_IFMT) != S_IFREG))
+    {
+      unlink(fndest);
       return -1;
-    if ((st.st_mode & S_IFMT) != S_IFREG)
-      return -1;
+    }
 
     return 0;
   }
