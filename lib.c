@@ -320,7 +320,7 @@ int mutt_mkdir(char *path, mode_t mode)
   int rv = -1;
 
   if (stat(path, &sb) >= 0)
-    return 0;
+    return S_ISDIR(sb.st_mode) ? 0 : -1;
 
   s = path;
   do
@@ -335,6 +335,9 @@ int mutt_mkdir(char *path, mode_t mode)
       if (mkdir(path, mode) < 0)
         goto cleanup;
     }
+    else if (!S_ISDIR(sb.st_mode))
+      goto cleanup;
+
     if (s)
       *s = '/';
   } while (s);
