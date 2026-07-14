@@ -955,7 +955,11 @@ static size_t maildir_hcache_keylen(const char *fn)
 #if HAVE_DIRENT_D_INO
 static int md_cmp_inode(struct maildir *a, struct maildir *b)
 {
-  return a->inode - b->inode;
+  if (a->inode < b->inode)
+    return -1;
+  else if (a->inode > b->inode)
+    return 1;
+  return 0;
 }
 #endif
 
