@@ -337,7 +337,6 @@ mutt_smtp_send(const ADDRESS *from, const ADDRESS *to, const ADDRESS *cc,
   CONNECTION *conn;
   ACCOUNT account;
   const char *envfrom;
-  char buf[1024];
   int ret = -1;
 
   if (smtp_fill_account(&account) < 0)
@@ -369,26 +368,35 @@ mutt_smtp_send(const ADDRESS *from, const ADDRESS *to, const ADDRESS *cc,
     FREE(&AuthMechs);
 
     /* send the sender's address */
-    ret = snprintf(buf, sizeof(buf), "MAIL FROM:<%s>", envfrom);
+    BUFFER *mailfrom_buf = mutt_buffer_pool_get();
+    mutt_buffer_printf(mailfrom_buf, "MAIL FROM:<%s>", envfrom);
+
     if (eightbit && mutt_bit_isset(Capabilities, EIGHTBITMIME))
     {
-      safe_strncat(buf, sizeof(buf), " BODY=8BITMIME", 15);
-      ret += 14;
+      mutt_buffer_addstr(mailfrom_buf, " BODY=8BITMIME");
     }
     if (DsnReturn && mutt_bit_isset(Capabilities, DSN))
-      ret += snprintf(buf + ret, sizeof(buf) - ret, " RET=%s", DsnReturn);
+    {
+      mutt_buffer_printf(mailfrom_buf, " RET=%s", DsnReturn);
+    }
     if (mutt_bit_isset(Capabilities, SMTPUTF8) &&
         (address_uses_unicode(envfrom) ||
          addresses_use_unicode(to) ||
          addresses_use_unicode(cc) ||
          addresses_use_unicode(bcc)))
-      ret += snprintf(buf + ret, sizeof(buf) - ret, " SMTPUTF8");
-    safe_strncat(buf, sizeof(buf), "\r\n", 3);
-    if (mutt_socket_write(conn, buf) == -1)
+    {
+      mutt_buffer_addstr(mailfrom_buf, " SMTPUTF8");
+    }
+    mutt_buffer_addstr(mailfrom_buf, "\r\n");
+
+    if (mutt_socket_write(conn, mutt_b2s(mailfrom_buf)) == -1)
     {
       ret = smtp_err_write;
+      mutt_buffer_pool_release(&mailfrom_buf);
       break;
     }
+    mutt_buffer_pool_release(&mailfrom_buf);
+
     if ((ret = smtp_get_resp(conn)))
       break;
 
