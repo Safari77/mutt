@@ -3204,8 +3204,7 @@ search_next:
   for (i = 0; i < rd.maxLine ; i++)
   {
     FREE(&(rd.lineInfo[i].syntax));
-    if (rd.SearchCompiled && rd.lineInfo[i].search)
-      FREE(&(rd.lineInfo[i].search));
+    FREE(&(rd.lineInfo[i].search));
   }
   if (rd.SearchCompiled)
   {
