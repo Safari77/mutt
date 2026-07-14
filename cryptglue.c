@@ -172,12 +172,15 @@ int crypt_pgp_decrypt_mime(FILE *a, FILE **b, BODY *c, BODY **d)
 {
 #ifdef USE_AUTOCRYPT
   int result;
+  int opt_was_set = option(OPTAUTOCRYPTGPGME);
 
   if (option(OPTAUTOCRYPT))
   {
     set_option(OPTAUTOCRYPTGPGME);
     result = pgp_gpgme_decrypt_mime(a, b, c, d);
-    unset_option(OPTAUTOCRYPTGPGME);
+    if (!opt_was_set)
+      unset_option(OPTAUTOCRYPTGPGME);
+
     if (result == 0)
     {
       c->is_autocrypt = 1;
@@ -206,12 +209,15 @@ int crypt_pgp_encrypted_handler(BODY *a, STATE *s)
 {
 #ifdef USE_AUTOCRYPT
   int result;
+  int opt_was_set = option(OPTAUTOCRYPTGPGME);
 
   if (option(OPTAUTOCRYPT))
   {
     set_option(OPTAUTOCRYPTGPGME);
     result = pgp_gpgme_encrypted_handler(a, s);
-    unset_option(OPTAUTOCRYPTGPGME);
+    if (!opt_was_set)
+      unset_option(OPTAUTOCRYPTGPGME);
+
     if (result == 0)
     {
       a->is_autocrypt = 1;
@@ -287,6 +293,7 @@ BODY *crypt_pgp_encrypt_message(HEADER *msg, BODY *a, char *keylist, int sign)
 {
 #ifdef USE_AUTOCRYPT
   BODY *result;
+  int opt_was_set = option(OPTAUTOCRYPTGPGME);
 
   if (msg->security & AUTOCRYPT)
   {
@@ -295,7 +302,8 @@ BODY *crypt_pgp_encrypt_message(HEADER *msg, BODY *a, char *keylist, int sign)
 
     set_option(OPTAUTOCRYPTGPGME);
     result = pgp_gpgme_encrypt_message(a, keylist, sign);
-    unset_option(OPTAUTOCRYPTGPGME);
+    if (!opt_was_set)
+      unset_option(OPTAUTOCRYPTGPGME);
 
     return result;
   }
