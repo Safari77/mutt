@@ -410,6 +410,7 @@ void rfc1524_free_entry(rfc1524_entry **entry)
   FREE(&p->testcommand);
   FREE(&p->composecommand);
   FREE(&p->composetypecommand);
+  FREE(&p->convert);
   FREE(&p->editcommand);
   FREE(&p->printcommand);
   FREE(&p->nametemplate);
@@ -619,11 +620,10 @@ void mutt_rfc1524_expand_filename(const char *nametemplate,
 int mutt_rename_file(const char *oldfile, const char *newfile)
 {
   FILE *ofp, *nfp;
+  int rc = 0;
 
   if (access(oldfile, F_OK) != 0)
     return 1;
-  if (access(newfile, F_OK) == 0)
-    return 2;
   if ((ofp = fopen(oldfile,"r")) == NULL)
     return 3;
   if ((nfp = safe_fopen(newfile,"w")) == NULL)
@@ -631,9 +631,15 @@ int mutt_rename_file(const char *oldfile, const char *newfile)
     safe_fclose(&ofp);
     return 3;
   }
-  mutt_copy_stream(ofp,nfp);
+  if (mutt_copy_stream(ofp,nfp) != 0) {
+    rc = 3;
+    goto bail;
+  }
+
+  mutt_unlink(oldfile);
+
+bail:
   safe_fclose(&nfp);
   safe_fclose(&ofp);
-  mutt_unlink(oldfile);
-  return 0;
+  return rc;
 }
