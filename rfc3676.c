@@ -380,7 +380,11 @@ static void rfc3676_space_stuff(const char *filename, int unstuff)
     goto bail;
   }
 
-  mutt_copy_stream(in, out);
+  if (mutt_copy_stream(in, out) != 0) {
+    mutt_perror(filename);
+    goto bail;
+  }
+
   safe_fclose(&in);
   safe_fclose(&out);
   mutt_set_mtime(mutt_b2s(tmpfile), filename);
