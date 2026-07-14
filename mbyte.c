@@ -162,6 +162,12 @@ int mutt_filter_unprintable(char **s)
              is_display_corrupting_utf8(wc))
       continue;
     k2 = wcrtomb(scratch, wc, &mbstate2);
+    if (k2 == (size_t)(-1))
+    {
+      scratch[0] = '?';
+      k2 = 1;
+      memset(&mbstate2, 0, sizeof(mbstate2));
+    }
     scratch[k2] = '\0';
     mutt_buffer_addstr(b, scratch);
   }
