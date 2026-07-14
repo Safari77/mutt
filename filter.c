@@ -29,6 +29,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/wait.h>
+#include <errno.h>
 
 /* Invokes a command on a pipe and optionally connects its stdin and stdout
  * to the specified handles.
@@ -187,7 +188,9 @@ int mutt_wait_filter(pid_t pid)
 {
   int rc;
 
-  waitpid(pid, &rc, 0);
+  while (waitpid(pid, &rc, 0) == -1 && errno == EINTR) {
+    ;
+  }
   mutt_unblock_signals_system(1);
   rc = WIFEXITED(rc) ? WEXITSTATUS(rc) : -1;
 
