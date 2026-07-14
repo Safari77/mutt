@@ -447,7 +447,7 @@ int mutt_view_attachment(FILE *fp, BODY *a, int flag, HEADER *hdr,
       }
       unlink_pagerfile = 1;
 
-      if (use_pipe && ((tempfd = open(mutt_b2s(tempfile), 0)) == -1))
+      if (use_pipe && ((tempfd = open(mutt_b2s(tempfile), O_RDONLY)) == -1))
       {
         if (pagerfd != -1)
           close(pagerfd);
