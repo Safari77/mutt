@@ -402,14 +402,17 @@ PARAMETER *rfc2231_encode_string(const char *attribute, char *value)
   max_value_len =
     78                      -    /* rfc suggested line length */
     1                       -    /* Leading tab on continuation line */
-    mutt_strlen(attribute) -    /* attribute */
     (encode ? 1 : 0)        -    /* '*' encoding marker */
     1                       -    /* '=' */
     (add_quotes ? 2 : 0)    -    /* "...." */
     1;                           /* ';' */
-
-  if (max_value_len < 30)
+  /* Subtract the attribute length separately, guarding against size_t
+   * underflow: a long attribute would otherwise wrap max_value_len to a
+   * huge value, defeating the clamp below and the split logic. */
+  if (mutt_strlen(attribute) + 30 > max_value_len)
     max_value_len = 30;
+  else
+    max_value_len -= mutt_strlen(attribute);
 
   if (dest_value_len > max_value_len)
   {
