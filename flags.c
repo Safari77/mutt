@@ -321,7 +321,6 @@ int mutt_thread_set_flag(HEADER *hdr, int flag, int bf, int subthread)
   if (cur->message)
   {
     mutt_set_flag(Context, cur->message, flag, bf);
-    cur->message->color.pair = cur->message->color.attrs = 0;
   }
 
   if ((cur = cur->child) == NULL)
@@ -332,7 +331,6 @@ int mutt_thread_set_flag(HEADER *hdr, int flag, int bf, int subthread)
     if (cur->message)
     {
       mutt_set_flag(Context, cur->message, flag, bf);
-      cur->message->color.pair = cur->message->color.attrs = 0;
     }
 
     if (cur->child)
