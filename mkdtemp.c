@@ -3,17 +3,16 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <errno.h>
-#include <time.h>
 #include <string.h>
+
+#include "mutt.h"
+#include "protos.h"
 
 /* mkdtemp function for systems which don't have one */
 char *mkdtemp(char *tmpl)
 {
-  static const char LETTERS[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  static unsigned long value = 0;
-  unsigned long     v;
   int               len;
-  int               i, j;
+  int               i;
 
   len = strlen(tmpl);
   if (len < 6 || strcmp(&tmpl[len - 6], "XXXXXX") != 0)
@@ -22,16 +21,10 @@ char *mkdtemp(char *tmpl)
     return NULL;
   }
 
-  value += ((unsigned long) time(NULL)) ^ getpid();
-
-  for (i = 0; i < 7 ; ++i, value += 7777)
+  for (i = 0; i < 7 ; ++i)
   {
     /* fill in the random bits */
-    for (j = 0, v = value; j < 6; ++j)
-    {
-      tmpl[(len - 6) + j] = LETTERS[v % 62];
-      v /= 62;
-    }
+    mutt_random_base32_string(&tmpl[len - 6], 6);
 
     /* try to create the directory */
     if (mkdir(tmpl, 0700) == 0)
