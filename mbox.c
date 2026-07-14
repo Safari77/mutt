@@ -178,7 +178,7 @@ int mmdf_parse_mailbox(CONTEXT *ctx)
 
       if (hdr->content->length > 0 && hdr->lines > 0)
       {
-        tmploc = loc + hdr->content->length;
+        tmploc = hdr->content->length < ctx->size ? loc + hdr->content->length : -1;
 
         if (0 < tmploc && tmploc < ctx->size)
         {
