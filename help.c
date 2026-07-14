@@ -185,12 +185,9 @@ static int get_wrapped_width(const char *t, size_t wid)
 
 static int pad(FILE *f, int col, int i)
 {
-  char fmt[15];  /* min size to accommodate %%-%ds */
-
   if (col < i)
   {
-    snprintf(fmt, sizeof(fmt), "%%-%ds", i - col);
-    fprintf(f, fmt, "");
+    fprintf(f, "%-*s", i - col, "");
     return (i);
   }
   fputc(' ', f);
