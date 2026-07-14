@@ -165,8 +165,19 @@ static int union_hash_insert(HASH * table, union hash_key key, void *data)
 int hash_insert(HASH * table, const char *strkey, void *data)
 {
   union hash_key key;
+  int r;
+
   key.strkey = table->strdup_keys ? safe_strdup(strkey) : strkey;
-  return union_hash_insert(table, key, data);
+
+  r = union_hash_insert(table, key, data);
+
+  /* If insertion fails (e.g., duplicate rejected) and we duplicated the key, free it */
+  if (r == -1 && table->strdup_keys)
+  {
+    FREE(&key.strkey);
+  }
+
+  return r;
 }
 
 int int_hash_insert(HASH * table, unsigned int intkey, void *data)
