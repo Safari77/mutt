@@ -732,10 +732,12 @@ int main(int argc, char **argv, char **environ)
       switch (i)
       {
         case 'A':
-          alias_queries = mutt_add_list(alias_queries, optarg);
+          if (*NONULL(optarg))
+            alias_queries = mutt_add_list(alias_queries, optarg);
           break;
         case 'a':
-          attach = mutt_add_list(attach, optarg);
+          if (*NONULL(optarg))
+            attach = mutt_add_list(attach, optarg);
           break;
 
         case 'F':
@@ -779,7 +781,8 @@ int main(int argc, char **argv, char **environ)
           break;
 
         case 'e':
-          commands = mutt_add_list(commands, optarg);
+          if (*NONULL(optarg))
+            commands = mutt_add_list(commands, optarg);
           break;
 
         case 'H':
@@ -804,7 +807,8 @@ int main(int argc, char **argv, char **environ)
           break;
 
         case 'Q':
-          queries = mutt_add_list(queries, optarg);
+          if (*NONULL(optarg))
+            queries = mutt_add_list(queries, optarg);
           break;
 
         case 'R':
