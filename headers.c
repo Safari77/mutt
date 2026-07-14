@@ -202,8 +202,11 @@ int mutt_edit_headers(const char *editor,
           if ((body = mutt_make_file_attach(mutt_b2s(path))))
           {
             body->description = safe_strdup(p);
-            for (parts = sctx->msg->content; parts->next; parts = parts->next) ;
-            parts->next = body;
+            if (sctx->msg->content)
+            {
+              for (parts = sctx->msg->content; parts->next; parts = parts->next) ;
+              parts->next = body;
+            }
           }
           else
           {
