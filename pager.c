@@ -1079,7 +1079,7 @@ static int grok_ansi(unsigned char *buf, int pos, ansi_attr *a)
         a->bg = -1;
         pos += 2;
       }
-      else if (mutt_strncmp("38;5;", (char *)&buf[pos], 5) == 0 && isdigit(buf[pos+5]))
+      else if (pos + 5 < x && mutt_strncmp("38;5;", (char *)&buf[pos], 5) == 0 && isdigit(buf[pos+5]))
       {
         char *end;
         a->pair = -1;
