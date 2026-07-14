@@ -1620,6 +1620,15 @@ struct option_t MuttVars[] = {
   ** UTF-8 encoded domains. (IDN only)
   */
 #endif /* defined(HAVE_LIBIDN) || defined(HAVE_LIBIDN2) */
+  { "hostname_mid",      DT_STR,  R_NONE, {.p=&Fqdn_mid}, {.p=0} },
+  /*
+  ** .pp
+  ** Specifies the fully-qualified hostname used in domain part
+  ** of generated Message-ID's.  If not set, uses $$hostname.
+  ** $$hidden_host setting is ignored when setting up $$hostname_mid.
+  ** .pp
+  ** Also see $$hostname.
+  */
   { "ignore_linear_white_space",    DT_BOOL, R_NONE, {.l=OPTIGNORELWS}, {.l=0} },
   /*
   ** .pp
@@ -2202,41 +2211,6 @@ struct option_t MuttVars[] = {
   */
   { "msg_format",       DT_SYN,  R_NONE, {.p="message_format"}, {.p=0} },
   /*
-  */
-  { "message_id_format", DT_STR, R_NONE, {.p=&MessageIdFormat}, {.p="<%z@%f>"} },
-  /*
-  ** .pp
-  ** This variable describes the format of the Message-ID generated
-  ** when sending messages.  Mutt 2.0 introduced a more compact
-  ** format, but this variable allows the ability to choose your own
-  ** format.  The value may end in ``|'' to invoke an external filter.
-  ** See $formatstrings-filters.
-  ** .pp
-  ** Please note that the Message-ID value follows a strict syntax,
-  ** and you are responsible for ensuring correctness if you change
-  ** this from the default.  In particular, the value must follow the
-  ** syntax in RFC 5322: ``\fC"<" id-left "@" id-right ">"\fP''.  No
-  ** spaces are allowed, and \fCid-left\fP should follow the
-  ** dot-atom-text syntax in the RFC.  The \fCid-right\fP should
-  ** generally be left at %f.
-  ** .pp
-  ** The old Message-ID format can be used by setting this to:
-  ** ``\fC<%Y%02m%02d%02H%02M%02S.G%c%p@%f>\fP''
-  ** .pp
-  ** The following \fCprintf(3)\fP-style sequences are understood:
-  ** .dl
-  ** .dt %c .dd step counter looping from ``A'' to ``Z''
-  ** .dt %d .dd current day of the month (GMT)
-  ** .dt %f .dd $$hostname
-  ** .dt %H .dd current hour using a 24-hour clock (GMT)
-  ** .dt %m .dd current month number (GMT)
-  ** .dt %M .dd current minute of the hour (GMT)
-  ** .dt %p .dd pid of the running mutt process
-  ** .dt %r .dd 3 bytes of pseudorandom data encoded in Base64
-  ** .dt %S .dd current second of the minute (GMT)
-  ** .dt %x .dd 1 byte of pseudorandom data hex encoded (example: '1b')
-  ** .dt %Y .dd current year using 4 digits (GMT)
-  ** .dt %z .dd 4 byte timestamp + 8 bytes of pseudorandom data encoded in Base64
   */
   { "meta_key",         DT_BOOL, R_NONE, {.l=OPTMETAKEY}, {.l=0} },
   /*

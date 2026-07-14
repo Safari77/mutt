@@ -127,8 +127,11 @@ int convert_nonmime_string(char **ps)
     if (!u || !*u)
       return 0;
 
-    c1 = strchr(c, ':');
-    n = c1 ? c1 - c : mutt_strlen(c);
+    /* Calculate the length up to the colon, or the end of the string */
+    n = strcspn (c, ":");
+
+    /* Set c1 to point to the colon, or NULL if we reached the end */
+    c1 = c[n] == ':' ? c + n : NULL;
     if (!n)
       return 0;
     fromcode = safe_malloc(n + 1);
@@ -161,10 +164,9 @@ char *mutt_choose_charset(const char *fromcode, const char *charsets,
     char *s, *t;
     size_t slen, n;
 
-    q = strchr(p, ':');
-
-    n = q ? q - p : strlen(p);
-    if (!n)
+    n = strcspn (p, ":");
+    q = p[n] == ':' ? p + n : NULL;
+    if (!n || n > 255)
       continue;
 
     t = safe_malloc(n + 1);

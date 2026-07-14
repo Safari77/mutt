@@ -120,6 +120,7 @@ enum
   QRESYNC,                      /* RFC 7162 */
   LIST_EXTENDED,                /* RFC 5258: IMAP4 - LIST Command Extensions */
   COMPRESS_DEFLATE,             /* RFC 4978: COMPRESS=DEFLATE */
+  X_GM_EXT1,                    /* X-GM-RAW https://developers.google.com/gmail/imap_extensions?csw=1 */
 
   CAPMAX
 };

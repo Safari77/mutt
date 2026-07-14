@@ -34,7 +34,6 @@
 #endif
 
 #include "mutt_crypt.h"
-#include "mutt_random.h"
 
 #include <string.h>
 #include <ctype.h>
@@ -48,6 +47,11 @@
 #include <sys/types.h>
 #include <utime.h>
 #include <dirent.h>
+#include <features.h>
+
+#ifdef HAVE_GETRANDOM
+#  include <sys/random.h>
+#endif
 
 BODY *mutt_new_body(void)
 {
@@ -56,6 +60,153 @@ BODY *mutt_new_body(void)
   p->disposition = DISPATTACH;
   p->use_disp = 1;
   return (p);
+}
+
+#define likely(x) __builtin_expect(!!(x), 1)
+#define unlikely(x) __builtin_expect(!!(x), 0)
+
+/** Fill a buffer with random data
+ * \param buf a buffer to fill
+ * \param buflen the number of bytes to fill
+ * \return the number of bytes filled
+ *
+ * Fill \a buf with \a buflen random bytes.
+ */
+ssize_t mutt_random_bytes(void* buf, size_t buflen) {
+  size_t total_read = 0;
+  char* ptr = (char*)buf;
+
+#ifdef HAVE_GETRANDOM
+#  warning getrandom enabled
+  while (total_read < buflen) {
+    ssize_t res = getrandom(ptr + total_read, buflen - total_read, 0);
+    if (res < 0) {
+      if (errno == EINTR) continue;
+      if (errno == ENOSYS && total_read == 0)
+        break;  // System kernel too old, fallback to /dev/urandom
+      abort();
+    }
+    total_read += res;
+  }
+
+  if (total_read == buflen) return total_read;
+#endif
+
+  // Fallback: Lazy-load and cache the /dev/urandom file descriptor.
+  static int cached_fd = -1;
+  int fd = __atomic_load_n(&cached_fd, __ATOMIC_RELAXED);
+
+  if (fd < 0) {
+    int new_fd = open("/dev/urandom", O_RDONLY | O_NOCTTY | O_CLOEXEC);
+    if (new_fd < 0) abort();
+
+    int expected = -1;
+    // Use atomic swap to prevent descriptor leaks if multiple threads hit
+    // this at once
+    if (__atomic_compare_exchange_n(&cached_fd, &expected, new_fd, 0,
+                                    __ATOMIC_RELAXED, __ATOMIC_RELAXED)) {
+      fd = new_fd;
+    } else {
+      // Another thread initialized it first
+      close(new_fd);
+      fd = expected;
+    }
+  }
+
+  while (total_read < buflen) {
+    ssize_t res = read(fd, ptr + total_read, buflen - total_read);
+    if (res < 0) {
+      if (errno == EINTR) continue;
+      abort();
+    }
+    if (res == 0) {
+      // Handle highly irregular EOF on /dev/urandom
+      abort();
+    }
+    total_read += res;
+  }
+
+  return total_read;
+}
+
+uint16_t mutt_rand16(void) {
+  uint16_t res;
+
+  mutt_random_bytes(&res, sizeof(res));
+  return res;
+}
+
+uint32_t mutt_rand32(void) {
+  uint32_t res;
+
+  mutt_random_bytes(&res, sizeof(res));
+  return res;
+}
+
+uint64_t mutt_rand64(void) {
+  uint64_t res;
+
+  mutt_random_bytes(&res, sizeof(res));
+  return res;
+}
+
+static const unsigned char base32[] = "abcdefghijklmnopqrstuvwxyz234567";
+
+void mutt_random_base32_string(void *out, size_t len)
+{
+  size_t pos;
+  uint8_t *p = out;
+
+  mutt_random_bytes(p, len);
+  for (pos = 0; pos < len; pos++)
+    p[pos] = base32[p[pos] % 32];
+}
+
+/*
+ * Calculate a uniformly distributed random number less than upper_bound
+ * avoiding "modulo bias".
+ *
+ * Uniformity is achieved by generating new random numbers until the one
+ * returned is outside the range [0, 2**32 % upper_bound).  This
+ * guarantees the selected random number will be inside
+ * [2**32 % upper_bound, 2**32) which maps back to [0, upper_bound)
+ * after reduction modulo upper_bound.
+ */
+uint32_t mutt_random_uniform32(uint32_t upper_bound) {
+    uint32_t r, mini;
+
+    if (upper_bound < 2) return 0;
+
+    /* 2**32 % x == (2**32 - x) % x */
+    mini = -upper_bound % upper_bound;
+
+    /*
+     * This could theoretically loop forever but each retry has
+     * p > 0.5 (worst case, usually far better) of selecting a
+     * number inside the range we need, so it should rarely need
+     * to re-roll.
+     */
+    for (;;) {
+        r = mutt_rand32();
+        if (likely(r >= mini)) break;
+    }
+
+    return r % upper_bound;
+}
+
+uint64_t mutt_random_uniform64(uint64_t upper_bound) {
+    uint64_t r, mini;
+
+    if (upper_bound < 2) return 0;
+
+    mini = -upper_bound % upper_bound;
+
+    for (;;) {
+        r = mutt_rand64();
+        if (likely(r >= mini)) break;
+    }
+
+    return r % upper_bound;
 }
 
 /* Modified by blong to accept a "suggestion" for file name.  If
@@ -99,12 +250,9 @@ void _mutt_buffer_mktemp(BUFFER *buf, const char *tempdir,
                          const char *prefix, const char *suffix,
                          const char *src, int line)
 {
-  RANDOM64 random64;
-  mutt_random_bytes(random64.char_array, sizeof(random64));
-
-  mutt_buffer_printf(buf, "%s/%s-%s-%d-%d-%"PRIu64"%s%s",
+  mutt_buffer_printf(buf, "%s/%s-%s-%d-%d-%" PRIu64 "%s%s",
                      NONULL(tempdir), NONULL(prefix), NONULL(Hostname),
-                     (int) getuid(), (int) getpid(), random64.int_64,
+                     (int) getuid(), (int) getpid(), mutt_rand64(),
                      suffix ? "." : "", NONULL(suffix));
   muttdbg(3, "%s:%d: mutt_mktemp returns \"%s\".", src, line, mutt_b2s(buf));
   if (unlink(mutt_b2s(buf)) && errno != ENOENT)

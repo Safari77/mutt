@@ -76,8 +76,19 @@ static const char * const Capabilities[] = {
   "QRESYNC",
   "LIST-EXTENDED",
   "COMPRESS=DEFLATE",
+  "X-GM-EXT1",
 
   NULL
+};
+
+/* Gmail document one string but use another.  Support both. */
+struct Capability_Alias {
+  char *name;
+  unsigned int value;
+};
+static struct Capability_Alias Capability_Aliases[] = {
+  { "X-GM-EXT-1", X_GM_EXT1 },
+  { NULL, 0 }
 };
 
 /* imap_cmd_start: Given an IMAP command, send it to the server.
@@ -614,7 +625,7 @@ static int cmd_handle_untagged(IMAP_DATA *idata)
  *   response */
 static void cmd_parse_capability(IMAP_DATA *idata, char *s)
 {
-  int x;
+  int x, found;
   char *bracket;
 
   muttdbg(3, "Handling CAPABILITY");
@@ -629,12 +640,25 @@ static void cmd_parse_capability(IMAP_DATA *idata, char *s)
 
   while (*s)
   {
+    found = 0;
     for (x = 0; x < CAPMAX; x++)
       if (imap_wordcaseeq(Capabilities[x], s))
       {
         mutt_bit_set(idata->capabilities, x);
+        muttdbg(4, (debugfile, " Found capability \"%s\": %d\n", Capabilities[x], x));
+        found = 1;
         break;
       }
+    if (!found) {
+      for (x = 0; Capability_Aliases[x].name != NULL; x++) {
+        if (imap_wordcaseeq(Capability_Aliases[x].name, s))
+        {
+          mutt_bit_set(idata->capabilities, Capability_Aliases[x].value);
+          muttdbg(4, (debugfile, " Found capability \"%s\": %d\n", Capability_Aliases[x].name,
+                  Capability_Aliases[x].value)); found = 1; break;
+        }
+      }
+    }
     s = imap_next_word(s);
   }
 }

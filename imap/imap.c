@@ -1171,7 +1171,7 @@ static int compare_uid(const void *a, const void *b)
 static int imap_make_msg_set(IMAP_DATA *idata, BUFFER *buf, int flag,
                              int changed, int invert, int *pos)
 {
-  HEADER **hdrs = idata->ctx->hdrs;
+  HEADER **hdrs;
   int count = 0;        /* number of messages in message set */
   int match = 0;        /* whether current message matches flag condition */
   unsigned int setstart = 0;    /* start of current message range */
@@ -1179,6 +1179,8 @@ static int imap_make_msg_set(IMAP_DATA *idata, BUFFER *buf, int flag,
   int started = 0;
 
   hdrs = idata->ctx->hdrs;
+  if (!hdrs)
+    return count;
 
   for (n = *pos;
        (n < idata->ctx->msgcount) && (mutt_buffer_len(buf) < IMAP_MAX_CMDLEN);
@@ -1293,9 +1295,14 @@ int imap_exec_msgset(IMAP_DATA *idata, const char *pre, const char *post,
     reopen_set = 1;
   }
   oldsort = Sort;
-  if (Sort != SORT_UID)
+  if ((Sort != SORT_UID) && idata->ctx->hdrs)
   {
     hdrs = idata->ctx->hdrs;
+    if (idata->ctx->msgcount > (INT_MAX / sizeof (HEADER*)))
+    {
+      mutt_error (_("imap_exec_msgset: integer overflow: %d"), idata->ctx->msgcount);
+      return -1;
+    }
     idata->ctx->hdrs = safe_malloc(idata->ctx->msgcount * sizeof(HEADER*));
     memcpy(idata->ctx->hdrs, hdrs, idata->ctx->msgcount * sizeof(HEADER*));
 
@@ -1618,6 +1625,12 @@ int imap_sync_mailbox(CONTEXT *ctx, int expunge, int *index_hint)
   if (Sort != SORT_UID)
   {
     hdrs = ctx->hdrs;
+    if (ctx->msgcount > (INT_MAX / sizeof (HEADER*)))
+    {
+      mutt_error (_("imap_sync_mailbox: integer overflow: %d"), ctx->msgcount);
+      rc = -1;
+      goto out;
+    }
     ctx->hdrs = safe_malloc(ctx->msgcount * sizeof(HEADER*));
     memcpy(ctx->hdrs, hdrs, ctx->msgcount * sizeof(HEADER*));
 
@@ -1671,7 +1684,7 @@ int imap_sync_mailbox(CONTEXT *ctx, int expunge, int *index_hint)
   /* Update local record of server state to reflect the synchronization just
    * completed.  imap_read_headers always overwrites hcache-origin flags, so
    * there is no need to mutate the hcache after flag-only changes. */
-  for (n = 0; n < ctx->msgcount; n++)
+  for (n = 0; n < ctx->msgcount && ctx->hdrs; n++)
   {
     HEADER_DATA(ctx->hdrs[n])->deleted = ctx->hdrs[n]->deleted;
     HEADER_DATA(ctx->hdrs[n])->flagged = ctx->hdrs[n]->flagged;
@@ -2169,6 +2182,9 @@ static int do_search(const pattern_t *search, int allpats)
         if (pat->stringmatch)
           rc++;
         break;
+      case MUTT_SERVERSEARCH:
+        rc++;
+        break;
       default:
         if (pat->child && do_search(pat->child, 1))
           rc++;
@@ -2184,7 +2200,7 @@ static int do_search(const pattern_t *search, int allpats)
 /* convert mutt pattern_t to IMAP SEARCH command containing only elements
  * that require full-text search (mutt already has what it needs for most
  * match types, and does a better job (eg server doesn't support regexps). */
-static int imap_compile_search(const pattern_t *pat, BUFFER *buf)
+static int imap_compile_search(CONTEXT* ctx, const pattern_t *pat, BUFFER *buf)
 {
   if (! do_search(pat, 0))
     return 0;
@@ -2210,7 +2226,7 @@ static int imap_compile_search(const pattern_t *pat, BUFFER *buf)
             mutt_buffer_addstr(buf, "OR ");
           clauses--;
 
-          if (imap_compile_search(clause, buf) < 0)
+          if (imap_compile_search(ctx, clause, buf) < 0)
             return -1;
 
           if (clauses)
@@ -2261,6 +2277,19 @@ static int imap_compile_search(const pattern_t *pat, BUFFER *buf)
         imap_quote_string(term, sizeof(term), pat->p.str);
         mutt_buffer_addstr(buf, term);
         break;
+      case MUTT_SERVERSEARCH:
+        {
+          IMAP_DATA* idata = (IMAP_DATA*)ctx->data;
+          if (!mutt_bit_isset (idata->capabilities, X_GM_EXT1))
+          {
+            mutt_error(_("Server-side custom search not supported: %s"), pat->p.str);
+            return -1;
+          }
+        }
+        mutt_buffer_addstr (buf, "X-GM-RAW ");
+        imap_quote_string (term, sizeof (term), pat->p.str);
+        mutt_buffer_addstr (buf, term);
+        break;
     }
   }
 
@@ -2287,7 +2316,7 @@ int imap_search(CONTEXT *ctx, const pattern_t *pat)
 
   mutt_buffer_init(&buf);
   mutt_buffer_addstr(&buf, "UID SEARCH ");
-  if (imap_compile_search(pat, &buf) < 0)
+  if (imap_compile_search(ctx, pat, &buf) < 0)
   {
     FREE(&buf.data);
     return -1;

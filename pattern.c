@@ -286,6 +286,12 @@ static const struct pattern_flags
        Pattern Completion Menu description for ~$
     */
     N_("unreferenced messages") },
+  { '/', MUTT_SERVERSEARCH, 0, EAT_REGEXP,
+    /* L10N:
+       Pattern Completion Menu description for ~/
+    */
+    N_("Gmail server search") },
+
   { 0, 0, 0, 0, NULL }
 };
 
@@ -1665,6 +1671,24 @@ mutt_pattern_exec(struct pattern_t *pat, pattern_exec_flag flags, CONTEXT *ctx, 
         return (h->matched);
 #endif
       return (pat->not ^ msg_search(ctx, pat, h->msgno));
+
+    case MUTT_SERVERSEARCH:
+#ifdef USE_IMAP
+      if (!ctx)
+        return 0;
+      if (ctx->magic == MUTT_IMAP)
+      {
+        if (pat->stringmatch)
+          return (h->matched);
+        return 0;
+      }
+      mutt_error (_("error: server custom search only supported with IMAP."));
+      return 0;
+#else
+      mutt_error (_("error: server custom search only supported with IMAP."));
+      return (-1);
+#endif
+
     case MUTT_SENDER:
       return (pat->not ^ match_adrlist(pat, flags & MUTT_MATCH_FULL_ADDRESS, 1,
                                        h->env->sender));

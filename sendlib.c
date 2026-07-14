@@ -35,7 +35,6 @@
 #include "pager.h"
 #include "charset.h"
 #include "mutt_crypt.h"
-#include "mutt_random.h"
 #include "mutt_idna.h"
 #include "buffy.h"
 #include "send.h"
@@ -546,13 +545,12 @@ int mutt_write_mime_body(BODY *a, FILE *f)
 
 #undef write_as_text_part
 
-#define BOUNDARYLEN 16
 void mutt_generate_boundary(PARAMETER **parm)
 {
-  char rs[BOUNDARYLEN + 1];
+  char rs[MUTT_RANDTAG_LEN + 1];
 
-  mutt_base64_random96(rs);
-
+  mutt_random_base32_string(rs, sizeof(rs) - 1);
+  rs[MUTT_RANDTAG_LEN] = 0;
   mutt_set_parameter("boundary", rs, parm);
 }
 
@@ -2540,6 +2538,23 @@ const char *mutt_fqdn(short may_hide_host)
   return p;
 }
 
+char *mutt_gen_msgid (void)
+{
+  char buf[SHORT_STRING];
+  time_t now = time (NULL);
+  struct tm tm_utc;
+  unsigned char rndid[MUTT_RANDTAG_LEN + 1];
+
+  mutt_random_base32_string(rndid, sizeof(rndid) - 1);
+  rndid[MUTT_RANDTAG_LEN] = 0;
+  gmtime_r (&now, &tm_utc);
+
+  snprintf (buf, sizeof (buf), "<%d%02d%02d%02d%02d%02d.%s@%s>",
+	    tm_utc.tm_year + 1900, tm_utc.tm_mon + 1, tm_utc.tm_mday, tm_utc.tm_hour,
+	    tm_utc.tm_min, tm_utc.tm_sec, rndid, Fqdn_mid);
+  return (safe_strdup (buf));
+}
+
 static void alarm_handler(int sig)
 {
   SigAlrm = 1;
@@ -2982,8 +2997,13 @@ static int _mutt_bounce_message(FILE *fp, HEADER *h, ADDRESS *to, const char *re
     mutt_copy_header(fp, h, f, ch_flags, NULL);
     fputc('\n', f);
     mutt_copy_bytes(fp, f, h->content->length);
-    safe_fclose(&f);
     FREE(&msgid_str);
+    if (safe_fclose (&f) != 0) {
+      mutt_perror(mutt_b2s (tempfile));
+      unlink(mutt_b2s (tempfile));
+      mutt_buffer_pool_release (&tempfile);
+      return -1;
+    }
 
 #if USE_SMTP
     if (SmtpUrl)

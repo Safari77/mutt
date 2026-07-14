@@ -1,0 +1,13 @@
+Added hostname_mid settting.
+message_id_format feature (from upstream) has been deleted.
+
+1.13: please configure
+  set ssl_ca_certificates_file="/etc/ssl/certs/ca-bundle.crt"
+to get the same default as in version 1.12.2.
+
+Support gmail extension X-GM-EXT-1 for X-GM-RAW search attribute:
+  https://developers.google.com/gmail/imap_extensions?csw=1
+Advanced search information:
+  https://support.google.com/mail/answer/7190
+Example search pattern at gmail imaps ("All Mail" folder):
+  =/ "larger:100M from:hillary"

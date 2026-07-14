@@ -421,7 +421,7 @@ AC_CHECK_TYPE(ssize_t, [],
               [AC_DEFINE([ssize_t], [int],
                          [Define to `int' if <sys/types.h> does not define.])])
 
-AC_CHECK_FUNCS(fgetpos memmove memccpy setegid srand48 strerror)
+AC_CHECK_FUNCS(fgetpos memmove memccpy setegid strerror getrandom)
 
 dnl random data functions
 AC_CHECK_HEADERS(sys/random.h)

@@ -364,8 +364,8 @@ static int mh_mkstemp(CONTEXT * dest, FILE ** fp, char **tgt)
   omask = umask(mh_umask(dest));
   FOREVER
   {
-    mutt_buffer_printf(path, "%s/.mutt-%s-%d-%d",
-                       dest->path, NONULL(Hostname), (int) getpid(), Counter++);
+    mutt_buffer_printf (path, "%s/.mutt-%s-%d-%" PRIu64,
+                        dest->path, NONULL (Hostname), (int) getpid (), mutt_rand64());
     if ((fd = open(mutt_b2s(path), O_WRONLY | O_EXCL | O_CREAT, 0666)) == -1)
     {
       if (errno != EEXIST)
@@ -1439,7 +1439,7 @@ static int ch_compar(const void *a, const void *b)
   return (int)( *((const char *) a) - *((const char *) b));
 }
 
-static void maildir_flags(char *dest, size_t destlen, HEADER * hdr)
+void maildir_flags(char *dest, size_t destlen, HEADER * hdr)
 {
   *dest = '\0';
 
@@ -1545,10 +1545,9 @@ static int maildir_open_new_message(MESSAGE * msg, CONTEXT * dest, HEADER * hdr)
   omask = umask(mh_umask(dest));
   FOREVER
   {
-    mutt_buffer_printf(path, "%s/tmp/%s.%lld.%u_%d.%s%s",
-                       dest->path, subdir, (long long)time(NULL), (unsigned int)getpid(),
-                       Counter++, NONULL(Hostname), suffix);
-
+    mutt_buffer_printf (path, "%s/tmp/%s.%lld.R%" PRIu64 ".%s%s",
+                       dest->path, subdir, (long long)time (NULL), mutt_rand64(),
+                      NONULL (Hostname), suffix);
     muttdbg(2, "maildir_open_new_message (): Trying %s.",
             mutt_b2s(path));
 
@@ -1638,9 +1637,9 @@ static int _maildir_commit_message(CONTEXT * ctx, MESSAGE * msg, HEADER * hdr)
   full = mutt_buffer_pool_get();
   FOREVER
   {
-    mutt_buffer_printf(path, "%s/%lld.%u_%d.%s%s", subdir,
-                       (long long)time(NULL), (unsigned int)getpid(), Counter++,
-                       NONULL(Hostname), suffix);
+    mutt_buffer_printf (path, "%s/%lld.R%" PRIu64 ".%s%s", subdir,
+                       (long long)time (NULL), mutt_rand64(),
+                       NONULL (Hostname), suffix);
     mutt_buffer_printf(full, "%s/%s", ctx->path, mutt_b2s(path));
 
     muttdbg(2, "_maildir_commit_message (): renaming %s to %s.",
@@ -2668,21 +2667,21 @@ int maildir_check_empty(const char *path)
   DIR *dp;
   struct dirent *de;
   int r = 1; /* assume empty until we find a message */
-  BUFFER *realpath = NULL;
+  BUFFER *trypath = NULL;
   int iter = 0;
 
   /* Strategy here is to look for any file not beginning with a period */
 
-  realpath = mutt_buffer_pool_get();
+  trypath = mutt_buffer_pool_get();
 
   do
   {
     /* we do "cur" on the first iteration since its more likely that we'll
      * find old messages without having to scan both subdirs
      */
-    mutt_buffer_printf(realpath, "%s/%s", path,
+    mutt_buffer_printf(trypath, "%s/%s", path,
                        iter == 0 ? "cur" : "new");
-    if ((dp = opendir(mutt_b2s(realpath))) == NULL)
+    if ((dp = opendir(mutt_b2s(trypath))) == NULL)
     {
       r = -1;
       goto out;
@@ -2700,7 +2699,7 @@ int maildir_check_empty(const char *path)
   } while (r && iter < 2);
 
 out:
-  mutt_buffer_pool_release(&realpath);
+  mutt_buffer_pool_release(&trypath);
 
   return r;
 }

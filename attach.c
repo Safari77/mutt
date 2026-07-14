@@ -819,7 +819,7 @@ int mutt_save_attachment(FILE *fp, BODY *m, const char *path, int flags, HEADER 
       fseeko((s.fpin = fp), m->offset, SEEK_SET);
       mutt_decode_attachment(m, &s);
 
-      if (fclose(s.fpout) != 0)
+      if (safe_fsync_close(&s.fpout) != 0)
       {
         mutt_perror("fclose");
         mutt_sleep(2);
@@ -854,7 +854,10 @@ int mutt_save_attachment(FILE *fp, BODY *m, const char *path, int flags, HEADER 
       return (-1);
     }
     safe_fclose(&ofp);
-    safe_fclose(&nfp);
+    if (safe_fsync_close (&nfp) != 0) {
+      mutt_error _("Write fault!");
+      return (-1);
+    }
   }
 
   return 0;
@@ -868,6 +871,7 @@ int mutt_decode_save_attachment(FILE *fp, BODY *m, const char *path,
   unsigned int saved_encoding = 0;
   BODY *saved_parts = NULL;
   HEADER *saved_hdr = NULL;
+  int ret = 0;
 
   memset(&s, 0, sizeof(s));
   s.flags = displaying;
@@ -925,7 +929,10 @@ int mutt_decode_save_attachment(FILE *fp, BODY *m, const char *path,
 
   mutt_body_handler(m, &s);
 
-  safe_fclose(&s.fpout);
+  if (safe_fsync_close (&s.fpout) != 0) {
+    mutt_perror("fclose");
+    ret = -1;
+  }
   if (fp == NULL)
   {
     m->length = 0;
@@ -939,7 +946,7 @@ int mutt_decode_save_attachment(FILE *fp, BODY *m, const char *path,
     safe_fclose(&s.fpin);
   }
 
-  return (0);
+  return ret;
 }
 
 /* Ok, the difference between send and receive:

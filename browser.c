@@ -749,10 +749,13 @@ static void init_menu(struct browser_state *state, MUTTMENU *menu, char *title,
 
   menu->tagged = 0;
 
-  if (state->buffy)
+  if (state->buffy) {
+    menu->is_mailbox_list = 1;
     snprintf(title, titlelen, _("Mailboxes [%d]"), mutt_buffy_check(0));
+  }
   else
   {
+    menu->is_mailbox_list = 0;
     mutt_buffer_strcpy(path, working_dir);
     mutt_buffer_pretty_mailbox(path);
 #ifdef USE_IMAP

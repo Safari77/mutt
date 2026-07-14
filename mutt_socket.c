@@ -626,6 +626,14 @@ int raw_socket_open(CONNECTION *conn)
     fd = socket(cur->ai_family, cur->ai_socktype, cur->ai_protocol);
     if (fd >= 0)
     {
+#if defined(SO_RCVTIMEO) && defined(SO_SNDTIMEO)
+      struct timeval tv = {
+        .tv_sec = 120
+      };
+
+      setsockopt (fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+      setsockopt (fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+#endif
       if ((rc = socket_connect(fd, cur->ai_addr)) == 0)
       {
         fcntl(fd, F_SETFD, FD_CLOEXEC);

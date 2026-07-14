@@ -425,6 +425,12 @@ int mutt_yesorno_with_help(const char *, int, const char *);
 void mutt_set_header_color(CONTEXT *, HEADER *);
 void mutt_sleep(short);
 int mutt_save_confirm(const char  *, struct stat *);
+ssize_t mutt_random_bytes(void *out, size_t len);
+#define MUTT_RANDTAG_LEN (16)
+void mutt_random_base32_string(void *out, size_t len);
+uint16_t mutt_rand16(void);
+uint32_t mutt_rand32(void);
+uint64_t mutt_rand64(void);
 
 int mh_valid_message(const char *);
 
@@ -479,16 +485,6 @@ void mutt_pattern_free(pattern_t **pat);
 #else
 #define LONGLONG long
 #endif
-
-#ifdef HAVE_SRAND48
-#define LRAND lrand48
-#define SRAND srand48
-#define DRAND drand48
-#else
-#define LRAND rand
-#define SRAND srand
-#define DRAND (double)rand
-#endif /* HAVE_SRAND48 */
 
 /* HP-UX, ConvexOS and UNIXware don't have this macro */
 #ifndef S_ISLNK

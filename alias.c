@@ -27,6 +27,7 @@
 
 #include <string.h>
 #include <ctype.h>
+#include <errno.h>
 
 static int check_alias_name(const char *s, BUFFER *dest);
 
@@ -401,8 +402,10 @@ retry_name:
     recode_buf(buf);
     write_safe_address(rc, mutt_b2s(buf));
     fputc('\n', rc);
-    safe_fclose(&rc);
-    mutt_message _("Alias added.");
+    if (safe_fsync_close(&rc) != 0)
+      mutt_message("Trouble adding alias: %s.", strerror(errno));
+    else
+      mutt_message _("Alias added.");
   }
   else
     mutt_perror(mutt_b2s(buf));

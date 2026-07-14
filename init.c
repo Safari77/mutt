@@ -3731,6 +3731,7 @@ void mutt_init(int skip_sys_rc, LIST *commands)
   int i, need_pause = 0;
   BUFFER err, *buffer = NULL;
 
+  tzset();
   mutt_buffer_init(&err);
   mutt_buffer_increase_size(&err, STRING);
 
@@ -3742,15 +3743,11 @@ void mutt_init(int skip_sys_rc, LIST *commands)
   mutt_menu_init();
   mutt_buffer_pool_init();
 
-  buffer = mutt_buffer_pool_get();
+  snprintf (AttachmentMarker, sizeof (AttachmentMarker),
+    "\033]9;%" PRIu64 "\a", mutt_rand64());
 
-  /*
-   * XXX - use something even more difficult to predict?
-   */
-  snprintf(AttachmentMarker, sizeof(AttachmentMarker),
-           "\033]9;%ld\a", (long) time(NULL));
-  snprintf(ProtectedHeaderMarker, sizeof(ProtectedHeaderMarker),
-           "\033]8;%ld\a", (long) time(NULL));
+  snprintf (ProtectedHeaderMarker, sizeof (ProtectedHeaderMarker),
+    "\033]8;%" PRIu64 "\a", mutt_rand64());
 
   /* on one of the systems I use, getcwd() does not return the same prefix
      as is listed in the passwd file */
@@ -3809,6 +3806,8 @@ void mutt_init(int skip_sys_rc, LIST *commands)
    * user has the ability to manually set it (for example, if their
    * DNS resolution has issues).
    */
+
+   buffer = mutt_buffer_pool_get ();
 
   /*
    * The call to uname() shouldn't fail, but if it does, the system is horribly
@@ -4034,6 +4033,9 @@ void mutt_init(int skip_sys_rc, LIST *commands)
 
 
   mutt_read_histfile();
+
+  if (!Fqdn_mid)
+    Fqdn_mid = safe_strdup(Fqdn);
 
   FREE(&err.data);
   mutt_buffer_pool_release(&buffer);

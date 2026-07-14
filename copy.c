@@ -389,7 +389,7 @@ mutt_copy_header(FILE *in, HEADER *h, FILE *out, int flags, const char *prefix)
     fputc('\n', out);
   }
 
-  if ((flags & CH_UPDATE_IRT) && h->env->in_reply_to)
+  if ((flags & CH_UPDATE_IRT) && h->env && h->env->in_reply_to)
   {
     LIST *listp = h->env->in_reply_to;
     fputs("In-Reply-To:", out);
@@ -401,7 +401,7 @@ mutt_copy_header(FILE *in, HEADER *h, FILE *out, int flags, const char *prefix)
     fputc('\n', out);
   }
 
-  if ((flags & CH_UPDATE_REFS) && h->env->references)
+  if ((flags & CH_UPDATE_REFS) && h->env && h->env->references)
   {
     fputs("References:", out);
     mutt_write_references(h->env->references, out, 0);
@@ -439,7 +439,7 @@ mutt_copy_header(FILE *in, HEADER *h, FILE *out, int flags, const char *prefix)
       fprintf(out, "Lines: %d\n", h->lines);
   }
 
-  if ((flags & CH_UPDATE_LABEL) && h->env->x_label)
+  if ((flags & CH_UPDATE_LABEL) && h->env && h->env->x_label)
   {
     temp_hdr = h->env->x_label;
     /* env->x_label isn't currently stored with direct references
@@ -459,7 +459,7 @@ mutt_copy_header(FILE *in, HEADER *h, FILE *out, int flags, const char *prefix)
       FREE(&temp_hdr);
   }
 
-  if ((flags & CH_UPDATE_SUBJECT) && h->env->subject)
+  if ((flags & CH_UPDATE_SUBJECT) && h->env && h->env->subject)
   {
     temp_hdr = h->env->subject;
     /* env->subject is directly referenced in Context->subj_hash, so we
@@ -832,6 +832,45 @@ mutt_append_message(CONTEXT *dest, CONTEXT *src, HEADER *hdr, int cmflags,
   r = _mutt_append_message(dest, msg->fp, src, hdr, hdr->content, cmflags, chflags);
   mx_close_message(src, &msg);
   return r;
+}
+
+/* Try to move a maildir message */
+int
+mutt_move_message (CONTEXT *dest, CONTEXT *src, HEADER *hdr)
+{
+  char fndest[PATH_MAX];
+  char fnsrc[PATH_MAX];
+  char newdest[PATH_MAX];
+  char *p;
+  char suffix[16];
+
+  if (dest->magic != MUTT_MAILDIR || src->magic != MUTT_MAILDIR)
+    return -1;
+  if (hdr->attach_del)
+    return -1;
+  p = strchr(hdr->path, '/');
+  if (!p)
+    return -1;
+
+  strfcpy(newdest, p + 1, sizeof(newdest));
+  /* kill the previous flags to prevent double :2, flags */
+  if ((p = strchr (newdest, ':')) != NULL)
+    *p = 0;
+  maildir_flags (suffix, sizeof (suffix), hdr);
+  snprintf(fndest, sizeof(fndest), "%s/cur/%s%s", dest->path, newdest, suffix);
+  snprintf(fnsrc, sizeof(fnsrc), "%s/%s", src->path, hdr->path);
+  if (link(fnsrc, fndest) == 0) {
+    struct stat st;
+
+    /* NFS sanity check */
+    if (stat(fndest, &st) == -1)
+      return -1;
+    if ((st.st_mode & S_IFMT) != S_IFREG)
+      return -1;
+
+    return 0;
+  }
+  return -1;
 }
 
 /*

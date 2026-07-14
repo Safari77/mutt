@@ -65,6 +65,7 @@ WHERE char *ForwardAttrIntro;
 WHERE char *ForwardAttrTrailer;
 WHERE char *ForwFmt;
 WHERE char *Fqdn;
+WHERE char *Fqdn_mid;
 WHERE char *HdrFmt;
 WHERE char *HistFile;
 WHERE char *Homedir;
@@ -92,7 +93,6 @@ WHERE long  HeaderCachePageSize;
 #endif /* HAVE_GDBM || HAVE_DB4 */
 #endif /* USE_HCACHE */
 WHERE char *MarkMacroPrefix;
-WHERE char *MessageIdFormat;
 WHERE char *MhFlagged;
 WHERE char *MhReplied;
 WHERE char *MhUnseen;
@@ -228,8 +228,6 @@ unsigned char QuadOptions[(OPT_MAX*2 + 7) / 8];
 #else
 extern unsigned char QuadOptions[];
 #endif
-
-WHERE unsigned short Counter;
 
 WHERE short ConnectTimeout;
 WHERE short ErrorHistSize;
