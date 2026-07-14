@@ -26,6 +26,7 @@
 /install-sh
 /missing
 /mkinstalldirs
+/ltmain.sh
 
 # gettextize installed files
 /ABOUT-NLS
@@ -41,6 +42,11 @@
 /m4/nls.m4
 /m4/po.m4
 /m4/progtest.m4
+/m4/libtool.m4
+/m4/ltoptions.m4
+/m4/ltsugar.m4
+/m4/ltversion.m4
+/m4/lt~obsolete.m4
 /po/Makefile.in.in
 /po/Makevars.template
 /po/Rules-quot
@@ -108,6 +114,7 @@ GPATH
 GRTAGS
 GTAGS
 TAGS
+tags
 cscope.*
 *.swp
 *.o
@@ -117,3 +124,4 @@ cscope.*
 *.a
 .gdb_history
 *~
+
