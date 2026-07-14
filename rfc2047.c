@@ -132,8 +132,10 @@ int convert_nonmime_string(char **ps)
 
     /* Set c1 to point to the colon, or NULL if we reached the end */
     c1 = c[n] == ':' ? c + n : NULL;
+
+    /* Skip empty segments (e.g., "utf-8::latin-1") */
     if (!n)
-      return 0;
+      continue;
     fromcode = safe_malloc(n + 1);
     strfcpy(fromcode, c, n + 1);
     m = convert_string(u, ulen, fromcode, Charset, &s, &slen);
