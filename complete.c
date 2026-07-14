@@ -41,7 +41,7 @@ int mutt_complete(char *s, size_t slen)
   char *p;
   DIR *dirp = NULL;
   struct dirent *de;
-  int i ,init=0;
+  int init = 0;
   size_t len;
   BUFFER *dirpart = NULL;
   BUFFER *exp_dirpart = NULL;
@@ -160,14 +160,25 @@ int mutt_complete(char *s, size_t slen)
     {
       if (init)
       {
-        char *fpch;
+        /* find how many bytes of filepart and de->d_name agree, but only
+         * count whole multibyte characters so we never truncate in the
+         * middle of one (which would leave an invalid sequence behind) */
+        size_t n = 0;
+        size_t flen = mutt_buffer_len(filepart);
+        size_t dlen = strlen(de->d_name);
+        mbstate_t mbstate;
+        memset(&mbstate, 0, sizeof(mbstate));
 
-        for (i=0, fpch = filepart->data; *fpch && de->d_name[i]; i++, fpch++)
+        while (n < flen)
         {
-          if (*fpch != de->d_name[i])
-            break;
+          size_t k = mbrlen(filepart->data + n, flen - n, &mbstate);
+          if (k == (size_t)-1 || k == (size_t)-2 || k == 0)
+            break;  /* invalid or incomplete character: stop at last boundary */
+          if (n + k > dlen || memcmp(filepart->data + n, de->d_name + n, k) != 0)
+            break;  /* next character differs: stop on this boundary */
+          n += k;
         }
-        *fpch = 0;
+        filepart->data[n] = 0;
         mutt_buffer_fix_dptr(filepart);
       }
       else
