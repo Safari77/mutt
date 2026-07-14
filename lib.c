@@ -359,12 +359,10 @@ void mutt_unlink(const char *s)
   struct stat sb, sb2;
   char buf[2048];
 
-  /* Defend against symlink attacks */
-
-#ifdef O_NOFOLLOW
-  flags = O_RDWR | O_NOFOLLOW;
-#else
   flags = O_RDWR;
+  /* Defend against symlink attacks */
+#ifdef O_NOFOLLOW
+  flags |= O_NOFOLLOW;
 #endif
 
   if (lstat(s, &sb) == 0 && S_ISREG(sb.st_mode))
@@ -389,6 +387,10 @@ void mutt_unlink(const char *s)
         sb.st_size -= MIN(sizeof(buf), sb.st_size);
       }
       safe_fclose(&f);
+    }
+    else
+    {
+      close(fd);
     }
   }
 }
