@@ -240,8 +240,7 @@ dump_char_size(char *c, unsigned char *d, int *off, ssize_t size, int convert)
     p = mutt_substrdup(c, c + size);
     if (mutt_convert_string(&p, Charset, "utf-8", 0) == 0)
     {
-      c = p;
-      size = mutt_strlen(c) + 1;
+      size = mutt_strlen(p) + 1;
     }
   }
 
