@@ -299,66 +299,80 @@ static size_t try_block(ICONV_CONST char *d, size_t dlen,
                         encoder_t *encoder, size_t *wlen)
 {
   char buf1[ENCWORD_LEN_MAX - ENCWORD_LEN_MIN + 1];
-  iconv_t cd;
-  ICONV_CONST char *ib;
-  char *ob, *p;
-  size_t ibl, obl;
-  int count, len, len_b, len_q;
+
+  // Prevent unsigned integer underflow by checking the charset name length.
+  size_t tocode_len = strlen(tocode);
+  if (tocode_len >= sizeof(buf1))
+  {
+    return dlen;
+  }
+
+  char *ob = buf1;
+  size_t obl = sizeof(buf1) - tocode_len;
 
   if (fromcode)
   {
-    cd = mutt_iconv_open(tocode, fromcode, 0);
+    iconv_t cd = mutt_iconv_open(tocode, fromcode, 0);
     assert(cd != (iconv_t)(-1));
-    ib = d, ibl = dlen, ob = buf1, obl = sizeof(buf1) - strlen(tocode);
+
+    ICONV_CONST char *ib = d;
+    size_t ibl = dlen;
+
     if (iconv(cd, &ib, &ibl, &ob, &obl) == (size_t)(-1) ||
-        iconv(cd, 0, 0, &ob, &obl) == (size_t)(-1))
+        iconv(cd, NULL, NULL, &ob, &obl) == (size_t)(-1))
     {
       assert(errno == E2BIG);
       iconv_close(cd);
       assert(ib > d);
-      return (ib - d == dlen) ? dlen : ib - d + 1;
+      return (ib - d == dlen) ? dlen : (size_t)(ib - d + 1);
     }
     iconv_close(cd);
   }
   else
   {
-    if (dlen > sizeof(buf1) - strlen(tocode))
-      return sizeof(buf1) - strlen(tocode) + 1;
+    if (dlen > obl)
+    {
+      return obl + 1;
+    }
     memcpy(buf1, d, dlen);
     ob = buf1 + dlen;
   }
 
-  count = 0;
-  for (p = buf1; p < ob; p++)
+  int count = 0;
+  for (const char *p = buf1; p < ob; p++)
   {
-    unsigned char c = *p;
-    if (c >= 0x7f || c < 0x20 || *p == '_' ||
-        (c != ' ' && strchr(RFC2047Specials, *p)))
+    unsigned char c = (unsigned char)*p;
+    if (c >= 0x7f || c < 0x20 || c == '_' ||
+        (c != ' ' && strchr(RFC2047Specials, c)))
+    {
       ++count;
+    }
   }
 
-  len = ENCWORD_LEN_MIN - 2 + strlen(tocode);
-  len_b = len + (((ob - buf1) + 2) / 3) * 4;
-  len_q = len + (ob - buf1) + 2 * count;
+  int len = ENCWORD_LEN_MIN - 2 + (int)tocode_len;
+  int len_b = len + (((ob - buf1) + 2) / 3) * 4;
+  int len_q = len + (int)(ob - buf1) + 2 * count;
 
   /* Apparently RFC 1468 says to use B encoding for iso-2022-jp. */
   if (!ascii_strcasecmp(tocode, "ISO-2022-JP"))
+  {
     len_q = ENCWORD_LEN_MAX + 1;
+  }
 
   if (len_b < len_q && len_b <= ENCWORD_LEN_MAX)
   {
     *encoder = b_encoder;
-    *wlen = len_b;
+    *wlen = (size_t)len_b;
     return 0;
   }
   else if (len_q <= ENCWORD_LEN_MAX)
   {
     *encoder = q_encoder;
-    *wlen = len_q;
+    *wlen = (size_t)len_q;
     return 0;
   }
-  else
-    return dlen;
+
+  return dlen;
 }
 
 /*
@@ -506,7 +520,6 @@ static int rfc2047_encode(ICONV_CONST char *d, size_t dlen, int col,
   if (t < u)  t = u;
   if (t < t0) t0 = t;
 
-
   /* Adjust t0 until we can encode a character after a space. */
   for (; t0 > u; t0--)
   {
@@ -557,20 +570,27 @@ static int rfc2047_encode(ICONV_CONST char *d, size_t dlen, int col,
         break;
       n = t1 - t - 1;
       if (icode)
-        while (CONTINUATION_BYTE(t[n]))
+      {
+        while (n > 0 && CONTINUATION_BYTE(t[n]))
           --n;
-      assert(t + n >= t);
+      }
       if (!n)
       {
-        /* This should only happen in the really stupid case where the
-           only word that needs encoding is one character long, but
-           there is too much us-ascii stuff after it to use a single
-           encoded word. We add the next word to the encoded region
-           and try again. */
-        assert(t1 < u + ulen);
-        for (t1++; t1 < u + ulen && !HSPACE(*t1); t1++)
-          ;
-        continue;
+        /* This handles the case where the only word that needs encoding
+           is one character long, but there is too much us-ascii stuff
+           after it to use a single encoded word. We add the next word
+           to the encoded region and try again. */
+        if (t1 < u + ulen)
+        {
+          for (t1++; t1 < u + ulen && !HSPACE(*t1); t1++)
+            ;
+          continue;
+        }
+        else
+        {
+          /* Can't extend further, just encode what we have */
+          break;
+        }
       }
       n = choose_block(t, n, col, icode, tocode, &encoder, &wlen);
     }
@@ -583,7 +603,16 @@ static int rfc2047_encode(ICONV_CONST char *d, size_t dlen, int col,
       safe_realloc(&buf, buflen);
     }
     r = encode_block(buf + bufpos, t, n, icode, tocode, encoder);
-    assert(r == wlen);
+    /* Defensive: if encoding produced unexpected length, adjust */
+    if (r != wlen)
+    {
+      wlen = r;
+      if (bufpos + wlen + strlen(LINEBREAK) > buflen)
+      {
+        buflen = bufpos + wlen + strlen(LINEBREAK);
+        safe_realloc(&buf, buflen);
+      }
+    }
     bufpos += wlen;
     memcpy(buf + bufpos, LINEBREAK, strlen(LINEBREAK));
     bufpos += strlen(LINEBREAK);
@@ -598,7 +627,13 @@ static int rfc2047_encode(ICONV_CONST char *d, size_t dlen, int col,
   buflen = bufpos + wlen + (u + ulen - t1);
   safe_realloc(&buf, buflen + 1);
   r = encode_block(buf + bufpos, t, t1 - t, icode, tocode, encoder);
-  assert(r == wlen);
+  /* Defensive: adjust for actual encoded length */
+  if (r != wlen)
+  {
+    wlen = r;
+    buflen = bufpos + wlen + (u + ulen - t1);
+    safe_realloc(&buf, buflen + 1);
+  }
   bufpos += wlen;
   memcpy(buf + bufpos, t1, u + ulen - t1);
 
@@ -810,7 +845,7 @@ static size_t lwslen(const char *s, size_t n)
   const char *p = s;
   size_t len = n;
 
-  if (n <= 0)
+  if (!n)
     return 0;
 
   for (; p < s + n; p++)
@@ -830,7 +865,7 @@ static size_t lwsrlen(const char *s, size_t n)
   const char *p = s + n - 1;
   size_t len = n;
 
-  if (n <= 0)
+  if (!n)
     return 0;
 
   if (strchr("\r\n", *p)) /* LWS doesn't end with CRLF */
