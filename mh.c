@@ -2139,6 +2139,7 @@ static void maildir_update_tables(CONTEXT *ctx, int *index_hint)
   short old_sort;
   int old_count;
   int i, j;
+  HEADER *hint_header = (index_hint && *index_hint >= 0 && *index_hint < ctx->msgcount) ? ctx->hdrs[*index_hint] : NULL;
 
   if (Sort != SORT_ORDER)
   {
@@ -2151,8 +2152,11 @@ static void maildir_update_tables(CONTEXT *ctx, int *index_hint)
   old_count = ctx->msgcount;
   for (i = 0, j = 0; i < old_count; i++)
   {
-    if (ctx->hdrs[i]->active && index_hint && *index_hint == i)
-      *index_hint = j;
+    if (ctx->hdrs[i]->active && hint_header == ctx->hdrs[i])
+    {
+      if (index_hint)
+        *index_hint = j;
+    }
 
     if (ctx->hdrs[i]->active)
       ctx->hdrs[i]->index = j++;
