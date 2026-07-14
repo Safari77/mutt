@@ -122,9 +122,6 @@ static int ssl_load_certificates(SSL_CTX *ctx)
   X509 *cert = NULL;
   X509_STORE *store;
   int rv = 1;
-#ifdef DEBUG
-  char buf[STRING];
-#endif
 
   muttdbg(2, "loading trusted certificates");
   store = SSL_CTX_get_cert_store(ctx);
@@ -142,8 +139,11 @@ static int ssl_load_certificates(SSL_CTX *ctx)
     if ((X509_cmp_current_time(X509_get0_notBefore(cert)) >= 0) ||
         (X509_cmp_current_time(X509_get0_notAfter(cert)) <= 0))
     {
+#ifdef DEBUG
+      char certbuf[STRING];
       muttdbg(2, "filtering expired cert: %s",
-              X509_NAME_oneline(X509_get_subject_name(cert), buf, sizeof(buf)));
+              X509_NAME_oneline(X509_get_subject_name(cert), certbuf, sizeof(certbuf)));
+#endif
     }
     else
     {
