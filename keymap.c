@@ -341,10 +341,11 @@ static void generic_tokenize_push_string(char *s, void (*generic_push)(int, int)
 {
   char *pp, *p = s + mutt_strlen(s) - 1;
   size_t l;
-  int i, op = OP_NULL;
+  int i, op;
 
   while (p >= s)
   {
+    op = OP_NULL;
     /* if we see something like "<PageUp>", look to see if it is a real
        function name and return the corresponding value */
     if (*p == '>')
