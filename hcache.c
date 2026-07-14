@@ -191,6 +191,10 @@ lazy_realloc(void *ptr, size_t siz)
   if (p != NULL && 0 < siz && siz < 4096)
     return;
 
+  /* grow in page-sized chunks: round up to the next multiple of 4096 so
+   * large headers realloc once per 4KB boundary instead of on every append */
+  siz = (siz + 4095) & ~((size_t) 4095);
+
   safe_realloc(ptr, siz);
 }
 
