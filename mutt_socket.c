@@ -516,6 +516,12 @@ int raw_socket_write(CONNECTION *conn, const char *buf, size_t count)
       return -1;
     }
 
+    if (rc == 0)
+    {
+      mutt_error(_("Error talking to %s (connection closed)"), conn->account.host);
+      mutt_sleep(2);
+      return -1;
+    }
     sent += rc;
   } while (sent < count);
 
