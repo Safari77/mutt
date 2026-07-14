@@ -3122,7 +3122,7 @@ static void matches_ensure_morespace(int current)
     extra_space *= 2;
     space = base_space + extra_space;
     safe_realloc(&Matches, space * sizeof(char *));
-    memset(&Matches[current + 1], 0, space - current);
+    memset(&Matches[current + 1], 0, (space - current) * sizeof(char *));
     Matches_listsize = space;
   }
 }
@@ -3179,7 +3179,7 @@ int mutt_command_complete(char *buffer, size_t len, int pos, int numtabs)
     {
       Num_matched = 0;
       strfcpy(User_typed, pt, sizeof(User_typed));
-      memset(Matches, 0, Matches_listsize);
+      memset(Matches, 0, Matches_listsize * sizeof(char *));
       memset(Completed, 0, sizeof(Completed));
       for (num = 0; Commands[num].name; num++)
         candidate(Completed, User_typed, Commands[num].name, sizeof(Completed));
@@ -3205,7 +3205,7 @@ int mutt_command_complete(char *buffer, size_t len, int pos, int numtabs)
                Matches[(numtabs - 2) % Num_matched]);
 
     /* return the completed command */
-    strncpy(buffer, Completed, len - spaces);
+    strfcpy(buffer, Completed, len - spaces);
   }
   else if (!mutt_strncmp(buffer, "set", 3)
            || !mutt_strncmp(buffer, "unset", 5)
@@ -3233,7 +3233,7 @@ int mutt_command_complete(char *buffer, size_t len, int pos, int numtabs)
     {
       Num_matched = 0;
       strfcpy(User_typed, pt, sizeof(User_typed));
-      memset(Matches, 0, Matches_listsize);
+      memset(Matches, 0, Matches_listsize * sizeof(char *));
       memset(Completed, 0, sizeof(Completed));
       for (num = 0; MuttVars[num].option; num++)
         candidate(Completed, User_typed, MuttVars[num].option, sizeof(Completed));
@@ -3275,7 +3275,7 @@ int mutt_command_complete(char *buffer, size_t len, int pos, int numtabs)
     {
       Num_matched = 0;
       strfcpy(User_typed, pt, sizeof(User_typed));
-      memset(Matches, 0, Matches_listsize);
+      memset(Matches, 0, Matches_listsize * sizeof(char *));
       memset(Completed, 0, sizeof(Completed));
       for (num = 0; menu[num].name; num++)
         candidate(Completed, User_typed, menu[num].name, sizeof(Completed));
@@ -4149,7 +4149,7 @@ int mutt_label_complete(char *buffer, size_t len, int numtabs)
 
     Num_matched = 0;
     strfcpy(User_typed, buffer, sizeof(User_typed));
-    memset(Matches, 0, Matches_listsize);
+    memset(Matches, 0, Matches_listsize * sizeof(char *));
     memset(Completed, 0, sizeof(Completed));
     memset(&state, 0, sizeof(state));
     while ((entry = hash_walk(Context->label_hash, &state)))
