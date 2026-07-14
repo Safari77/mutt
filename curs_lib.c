@@ -191,7 +191,7 @@ event_t mutt_getch(void)
     return timeout;
   }
 
-  if ((ch & 0x80) && option(OPTMETAKEY))
+  if (ch >= 0 && ch < 0x100 && (ch & 0x80) && option(OPTMETAKEY))
   {
     /* send ALT-x as ESC-x */
     ch &= ~0x80;
