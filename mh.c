@@ -1525,7 +1525,7 @@ static int maildir_open_new_message(MESSAGE * msg, CONTEXT * dest, HEADER * hdr)
 {
   int fd, rc = 0;
   BUFFER *path = NULL;
-  char suffix[16];
+  char suffix[LONG_STRING];
   char subdir[16];
   mode_t omask;
 
@@ -1617,7 +1617,7 @@ out:
 static int _maildir_commit_message(CONTEXT * ctx, MESSAGE * msg, HEADER * hdr)
 {
   char subdir[4];
-  char suffix[16];
+  char suffix[LONG_STRING];
   int rc = 0;
   BUFFER *path = NULL, *full = NULL;
   char *s;
@@ -1910,7 +1910,7 @@ static int maildir_sync_message(CONTEXT * ctx, int msgno)
          *partpath = NULL,
          *fullpath = NULL,
          *oldpath = NULL;
-  char suffix[16];
+  char suffix[LONG_STRING];
   char *p;
   int rc = 0;
 
