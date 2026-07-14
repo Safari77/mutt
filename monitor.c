@@ -281,7 +281,6 @@ int mutt_monitor_poll(void)
             MonitorFilesChanged = 1;
             muttdbg(3, "monitor: file change(s) detected");
             int len;
-            char *ptr = buf;
             const struct inotify_event *event;
 
             FOREVER
@@ -294,6 +293,8 @@ int mutt_monitor_poll(void)
                 break;
               }
 
+              /* Reset ptr to the beginning of the buffer for each read chunk */
+              char *ptr = buf;
               while (ptr < buf + len)
               {
                 event = (const struct inotify_event *) ptr;
