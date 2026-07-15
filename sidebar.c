@@ -222,12 +222,20 @@ static void make_sidebar_entry(char *buf, unsigned int buflen, int width, const 
   /* Force string to be exactly the right width */
   int w = mutt_strwidth(buf);
   int s = mutt_strlen(buf);
-  width = MIN(buflen, width);
+
   if (w < width)
   {
     /* Pad with spaces */
-    memset(buf + s, ' ', width - w);
-    buf[s + width - w] = 0;
+    int pad = width - w;
+    /* Ensure we never write past the buffer's capacity */
+    if (s + pad >= buflen)
+      pad = buflen - 1 - s;
+
+    if (pad > 0)
+    {
+      memset(buf + s, ' ', pad);
+      buf[s + pad] = 0;
+    }
   }
   else if (w > width)
   {
