@@ -1586,7 +1586,7 @@ static void clean_references(THREAD *brk, THREAD *cur)
     clean_references(brk, cur->child);
 
     if (!cur->message)
-      break; /* skip pseudo-message */
+      continue; /* skip pseudo-message */
 
     /* Looking for the first bad reference according to the new threading.
      * Optimal since Mutt stores the references in reverse order, and the
