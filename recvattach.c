@@ -1300,7 +1300,7 @@ decrypt_failed:
 
       if (m->type == TYPEMULTIPART)
         mutt_generate_recvattach_list(actx, hdr, m->parts, fp, m->type, level + 1, decrypted);
-      else if (mutt_is_message_type(m->type, m->subtype))
+      else if (mutt_is_message_type(m->type, m->subtype) && m->hdr)
       {
         mutt_generate_recvattach_list(actx, m->hdr, m->parts, fp, m->type, level + 1, decrypted);
         hdr->security |= m->hdr->security;
