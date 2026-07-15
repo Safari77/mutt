@@ -191,9 +191,20 @@ int url_parse_ciss(ciss_url_t *ciss, char *src)
   return ciss_parse_userhost(ciss, tmp);
 }
 
-/* Percent-encode src into dst (buffer of size l) per RFC 3986:
- * unreserved characters (ALPHA / DIGIT / "-" / "." / "_" / "~")
- * pass through, everything else is encoded as %XX. */
+/* Percent-encode src into dst (buffer of size l) per RFC 3986,
+ * with one deliberate exception.  Unreserved characters (2.3) and
+ * sub-delims (2.2) pass through unencoded; sub-delims are legal in
+ * userinfo (3.2.1), and passing them through keeps the serialized
+ * URL byte-identical to the old "/:%"-only encoder for those
+ * characters, so account-hook/folder-hook patterns keep matching.
+ * ":" is also legal in userinfo, but the old encoder escaped it,
+ * so we still do.
+ *
+ * Exception: '@' is NOT legal raw in userinfo, but we pass it
+ * through for backward compatibility with existing account-hook
+ * patterns for email-style logins (user@example.com); this is safe
+ * internally because url_parse_ciss splits userinfo from host on
+ * the LAST '@' (strrchr), so it round-trips. */
 static void url_pct_encode(char *dst, size_t l, const char *src)
 {
   static const char *alph = "0123456789ABCDEF";
@@ -207,7 +218,8 @@ static void url_pct_encode(char *dst, size_t l, const char *src)
     unsigned char c = (unsigned char) *src;
     if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
         (c >= '0' && c <= '9') ||
-        c == '-' || c == '.' || c == '_' || c == '~')
+        c == '-' || c == '.' || c == '_' || c == '~' ||
+        c == '@' || strchr("!$&'()*+,;=", c))
     {
       *dst++ = *src++;
       l--;
