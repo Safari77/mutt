@@ -284,6 +284,11 @@ static void pgp_make_pgp3_fingerprint(unsigned char *buff, size_t l,
   unsigned char dummy;
   SHA1_CTX context;
 
+  if (l < 1)
+  {
+    memset(digest, 0, SHA_DIGEST_LENGTH);
+    return;
+  }
   SHA1_Init(&context);
 
   dummy = buff[0] & 0x3f;
@@ -299,7 +304,6 @@ static void pgp_make_pgp3_fingerprint(unsigned char *buff, size_t l,
   SHA1_Update(&context, &dummy, 1);
   SHA1_Update(&context, buff + 1, l - 1);
   SHA1_Final(digest, &context);
-
 }
 
 static void skip_bignum(unsigned char *buff, size_t l, size_t j,
