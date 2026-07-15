@@ -115,7 +115,7 @@ const char *mutt_gsasl_get_mech(const char *requested_mech,
     if (mechlist_contains(uc_requested_mech, uc_server_mechlist))
       rv = gsasl_client_suggest_mechanism(mutt_gsasl_ctx, uc_requested_mech);
   }
-  else
+  else if (uc_server_mechlist)
     rv = gsasl_client_suggest_mechanism(mutt_gsasl_ctx, uc_server_mechlist);
 
   FREE(&uc_requested_mech);
