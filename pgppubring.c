@@ -253,7 +253,7 @@ static pgp_key_t pgp_parse_pgp2_key(unsigned char *buff, size_t l)
   p->keylen = expl;
 
   expl = (expl + 7) / 8;
-  if (expl < 4)
+  if (expl < 8)
     goto bailout;
 
 
