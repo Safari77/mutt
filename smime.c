@@ -984,7 +984,7 @@ static int smime_handle_cert_email(char *certificate, char *mailbox,
     len = mutt_strlen(email);
     if (len && (email[len - 1] == '\n'))
       email[len - 1] = '\0';
-    if (mutt_strncasecmp(email, mailbox, mutt_strlen(mailbox)) == 0)
+    if (mutt_strcasecmp(email, mailbox) == 0)
       ret=1;
 
     ret = ret < 0 ? 0 : ret;
