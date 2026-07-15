@@ -902,13 +902,13 @@ char *smime_findKeys(ADDRESS *adrlist, int oppenc_mode)
     {
       snprintf(buf, sizeof(buf),
                _("Enter keyID for %s: "),
-               q->mailbox);
+               q->mailbox ?: "?");
       key = smime_ask_for_key(buf, KEYFLAG_CANENCRYPT, 1);
     }
     if (!key)
     {
       if (! oppenc_mode)
-        mutt_message(_("No (valid) certificate found for %s."), q->mailbox);
+        mutt_message(_("No (valid) certificate found for %s."), q->mailbox ?: _("unknown"));
       FREE(&keylist);
       return NULL;
     }
