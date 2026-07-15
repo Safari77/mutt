@@ -160,7 +160,7 @@ static int compare_spam(const void *a, const void *b)
   /* If either aptr or bptr is equal to data, there is no numeric    */
   /* value for that spam attribute. In this case, compare lexically. */
   if ((aptr == (*ppa)->env->spam->data) || (bptr == (*ppb)->env->spam->data))
-    return (strcmp(aptr, bptr));
+    return (strcmp((*ppa)->env->spam->data, (*ppb)->env->spam->data));
 
   /* map double into comparison (-1, 0, or 1) */
   result = (difference < 0.0 ? -1 : difference > 0.0 ? 1 : 0);
