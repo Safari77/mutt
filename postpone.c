@@ -661,7 +661,8 @@ int mutt_prepare_template(FILE *fp, CONTEXT *ctx, HEADER *newhdr, HEADER *hdr,
       newhdr->security |= APPLICATION_SMIME;
 
     /* destroy the signature */
-    mutt_free_body(&newhdr->content->parts->next);
+    if (newhdr->content->parts)
+      mutt_free_body(&newhdr->content->parts->next);
     newhdr->content = mutt_remove_multipart(newhdr->content);
 
     if (newhdr->content->mime_headers)
