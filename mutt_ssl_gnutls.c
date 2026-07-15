@@ -730,6 +730,7 @@ static int tls_check_stored_hostname(const gnutls_datum_t *cert,
       }
     }
 
+    FREE(&linestr);
     regfree(&preg);
     safe_fclose(&fp);
   }
