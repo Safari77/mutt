@@ -427,7 +427,7 @@ dnl random data functions
 AC_CHECK_HEADERS(sys/random.h)
 AC_CHECK_FUNCS(getrandom arc4random_buf)
 
-AC_REPLACE_FUNCS([setenv strcasecmp strdup strsep strtok_r wcscasecmp])
+AC_REPLACE_FUNCS([strcasecmp strdup strsep strtok_r wcscasecmp])
 AC_REPLACE_FUNCS([strcasestr mkdtemp])
 
 AC_CHECK_FUNC(getopt)

@@ -528,10 +528,6 @@ void ci_bounce_message(HEADER *);
 
 /* prototypes for compatibility functions */
 
-#ifndef HAVE_SETENV
-int setenv(const char *, const char *, int);
-#endif
-
 #ifndef HAVE_STRCASECMP
 int strcasecmp(char *, char *);
 int strncasecmp(char *, char *, size_t);
