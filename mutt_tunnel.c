@@ -127,9 +127,10 @@ static int tunnel_socket_open(CONNECTION *conn)
     FREE(&conn->sockdata);
     return -1;
   }
-  if (close(pin[1]) < 0 || close(pout[0]) < 0)
+  int rc_pin = close(pin[1]);
+  int rc_pout = close(pout[0]);
+  if (rc_pin < 0 || rc_pout < 0)
     mutt_perror("close");
-
   fcntl(pin[0], F_SETFD, FD_CLOEXEC);
   fcntl(pout[1], F_SETFD, FD_CLOEXEC);
 
