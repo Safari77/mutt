@@ -1458,26 +1458,32 @@ int mx_close_message(CONTEXT *ctx, MESSAGE **msg)
   return (r);
 }
 
+#define MX_HDR_ALLOC_STEP 25
+
 void mx_alloc_memory(CONTEXT *ctx)
 {
   int i;
   size_t s = MAX(sizeof(HEADER *), sizeof(int));
 
-  if ((ctx->hdrmax + 25) * s < ctx->hdrmax * s)
+  /* First ensure the increment won't overflow a signed int (which is
+   * undefined behaviour), then ensure the resulting element count won't
+   * overflow size_t when multiplied by the element size. */
+  if (ctx->hdrmax > INT_MAX - MX_HDR_ALLOC_STEP ||
+      (size_t)(ctx->hdrmax + MX_HDR_ALLOC_STEP) > SIZE_MAX / s)
   {
-    mutt_error _("Integer overflow -- can't allocate memory.");
+    mutt_error _("mx_alloc_memory: integer overflow -- can't allocate memory.");
     sleep(1);
     mutt_exit(1);
   }
 
   if (ctx->hdrs)
   {
-    safe_realloc(&ctx->hdrs, sizeof(HEADER *) * (ctx->hdrmax += 25));
+    safe_realloc(&ctx->hdrs, sizeof(HEADER *) * (ctx->hdrmax += MX_HDR_ALLOC_STEP));
     safe_realloc(&ctx->v2r, sizeof(int) * ctx->hdrmax);
   }
   else
   {
-    ctx->hdrs = safe_calloc((ctx->hdrmax += 25), sizeof(HEADER *));
+    ctx->hdrs = safe_calloc((ctx->hdrmax += MX_HDR_ALLOC_STEP), sizeof(HEADER *));
     ctx->v2r = safe_calloc(ctx->hdrmax, sizeof(int));
   }
   for (i = ctx->msgcount ; i < ctx->hdrmax ; i++)
