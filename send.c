@@ -1237,8 +1237,12 @@ cleanup:
   if (tempfp)
   {
     safe_fclose(&tempfp);
+  }
+  if (tempfile)
+  {
     unlink(mutt_b2s(tempfile));
   }
+
   mutt_buffer_pool_release(&tempfile);
   return (i);
 }
