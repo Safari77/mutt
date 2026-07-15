@@ -847,63 +847,109 @@ static const char *uncomment_timezone(char *buf, size_t buflen, const char *tz)
   return buf;
 }
 
+
+/* Timezone lookup uses a minimal perfect hash instead of bsearch, giving
+ * O(1) lookups.  A zone name (max 4 lowercase ASCII chars) is packed
+ * little-endian into a 32-bit key; slot = (key * TZ_HASH_MULT) >> TZ_HASH_SHIFT.
+ *
+ * The multiplier was found by exhaustive search so that all 43 names map to
+ * distinct slots in a 128-entry table.  IF YOU ADD OR RENAME AN ENTRY you must
+ * re-run the search for a new multiplier and regenerate the slot indices
+ * (a few lines of script: pack each name as below, try random odd 32-bit
+ * multipliers until all slots are unique).
+ */
+#define TZ_HASH_MULT  0xEBED290Bu
+#define TZ_HASH_SHIFT 25 /* 32 - log2(TZ_HASH_SIZE) */
+#define TZ_HASH_SIZE  128
+
 static const struct tz_t
 {
   char tzname[5];
   unsigned char zhours;
   unsigned char zminutes;
   unsigned char zoccident; /* west of UTC? */
-} TimeZones[] =
+} TimeZones[TZ_HASH_SIZE] =
 {
-  { "aat",   1,  0, 1 }, /* Atlantic Africa Time */
-  { "adt",   4,  0, 0 }, /* Arabia DST */
-  { "ast",   3,  0, 0 }, /* Arabia */
-/*{ "ast",   4,  0, 1 },*/ /* Atlantic */
-  { "bst",   1,  0, 0 }, /* British DST */
-  { "cat",   1,  0, 0 }, /* Central Africa */
-  { "cdt",   5,  0, 1 },
-  { "cest",  2,  0, 0 }, /* Central Europe DST */
-  { "cet",   1,  0, 0 }, /* Central Europe */
-  { "cst",   6,  0, 1 },
-/*{ "cst",   8,  0, 0 },*/ /* China */
-/*{ "cst",   9, 30, 0 },*/ /* Australian Central Standard Time */
-  { "eat",   3,  0, 0 }, /* East Africa */
-  { "edt",   4,  0, 1 },
-  { "eest",  3,  0, 0 }, /* Eastern Europe DST */
-  { "eet",   2,  0, 0 }, /* Eastern Europe */
-  { "egst",  0,  0, 0 }, /* Eastern Greenland DST */
-  { "egt",   1,  0, 1 }, /* Eastern Greenland */
-  { "est",   5,  0, 1 },
-  { "gmt",   0,  0, 0 },
-  { "gst",   4,  0, 0 }, /* Presian Gulf */
-  { "hkt",   8,  0, 0 }, /* Hong Kong */
-  { "ict",   7,  0, 0 }, /* Indochina */
-  { "idt",   3,  0, 0 }, /* Israel DST */
-  { "ist",   2,  0, 0 }, /* Israel */
-/*{ "ist",   5, 30, 0 },*/ /* India */
-  { "jst",   9,  0, 0 }, /* Japan */
-  { "kst",   9,  0, 0 }, /* Korea */
-  { "mdt",   6,  0, 1 },
-  { "met",   1,  0, 0 }, /* this is now officially CET */
-  { "msd",   4,  0, 0 }, /* Moscow DST */
-  { "msk",   3,  0, 0 }, /* Moscow */
-  { "mst",   7,  0, 1 },
-  { "nzdt", 13,  0, 0 }, /* New Zealand DST */
-  { "nzst", 12,  0, 0 }, /* New Zealand */
-  { "pdt",   7,  0, 1 },
-  { "pst",   8,  0, 1 },
-  { "sat",   2,  0, 0 }, /* South Africa */
-  { "smt",   4,  0, 0 }, /* Seychelles */
-  { "sst",  11,  0, 1 }, /* Samoa */
-/*{ "sst",   8,  0, 0 },*/ /* Singapore */
-  { "utc",   0,  0, 0 },
-  { "wat",   0,  0, 0 }, /* West Africa */
-  { "west",  1,  0, 0 }, /* Western Europe DST */
-  { "wet",   0,  0, 0 }, /* Western Europe */
-  { "wgst",  2,  0, 1 }, /* Western Greenland DST */
-  { "wgt",   3,  0, 1 }, /* Western Greenland */
-  { "wst",   8,  0, 0 }, /* Western Australia */
+  /* Ambiguous abbreviations deliberately left out (kept from the old table):
+   *  { "ast",   4,  0, 1 },   Atlantic
+   *  { "cst",   8,  0, 0 },   China
+   *  { "cst",   9, 30, 0 },   Australian Central Standard Time
+   *  { "ist",   5, 30, 0 },   India
+   *  { "sst",   8,  0, 0 },   Singapore
+   */
+  [  0] = { "idt",   3,  0, 0 }, /* Israel DST */
+  [  2] = { "msd",   4,  0, 0 }, /* Moscow DST */
+  [  7] = { "gst",   4,  0, 0 }, /* Presian Gulf */
+  [  8] = { "eest",  3,  0, 0 }, /* Eastern Europe DST */
+  [ 10] = { "ict",   7,  0, 0 }, /* Indochina */
+  [ 12] = { "egt",   1,  0, 1 }, /* Eastern Greenland */
+  [ 14] = { "sst",  11,  0, 1 }, /* Samoa */
+  [ 16] = { "wat",   0,  0, 0 }, /* West Africa */
+  [ 18] = { "msk",   3,  0, 0 }, /* Moscow */
+  [ 20] = { "utc",   0,  0, 0 },
+  [ 27] = { "est",   5,  0, 1 },
+  [ 28] = { "cest",  2,  0, 0 }, /* Central Europe DST */
+  [ 31] = { "eet",   2,  0, 0 }, /* Eastern Europe */
+  [ 40] = { "edt",   4,  0, 1 },
+  [ 45] = { "pst",   8,  0, 1 },
+  [ 47] = { "cst",   6,  0, 1 },
+  [ 51] = { "cet",   1,  0, 0 }, /* Central Europe */
+  [ 52] = { "nzdt", 13,  0, 0 }, /* New Zealand DST */
+  [ 56] = { "sat",   2,  0, 0 }, /* South Africa */
+  [ 57] = { "bst",   1,  0, 0 }, /* British DST */
+  [ 58] = { "pdt",   7,  0, 1 },
+  [ 60] = { "cdt",   5,  0, 1 },
+  [ 63] = { "gmt",   0,  0, 0 },
+  [ 65] = { "wgst",  2,  0, 1 }, /* Western Greenland DST */
+  [ 67] = { "ast",   3,  0, 0 }, /* Arabia */
+  [ 69] = { "eat",   3,  0, 0 }, /* East Africa */
+  [ 71] = { "smt",   4,  0, 0 }, /* Seychelles */
+  [ 72] = { "hkt",   8,  0, 0 }, /* Hong Kong */
+  [ 75] = { "mst",   7,  0, 1 },
+  [ 79] = { "met",   1,  0, 0 }, /* this is now officially CET */
+  [ 80] = { "adt",   4,  0, 0 }, /* Arabia DST */
+  [ 84] = { "west",  1,  0, 0 }, /* Western Europe DST */
+  [ 87] = { "wgt",   3,  0, 1 }, /* Western Greenland */
+  [ 88] = { "mdt",   6,  0, 1 },
+  [ 89] = { "cat",   1,  0, 0 }, /* Central Africa */
+  [ 95] = { "kst",   9,  0, 0 }, /* Korea */
+  [102] = { "wst",   8,  0, 0 }, /* Western Australia */
+  [104] = { "nzst", 12,  0, 0 }, /* New Zealand */
+  [105] = { "jst",   9,  0, 0 }, /* Japan */
+  [106] = { "wet",   0,  0, 0 }, /* Western Europe */
+  [109] = { "aat",   1,  0, 1 }, /* Atlantic Africa Time */
+  [115] = { "ist",   2,  0, 0 }, /* Israel */
+  [118] = { "egst",  0,  0, 0 }, /* Eastern Greenland DST */
 };
+
+/* O(1) case-insensitive timezone lookup via the perfect hash above.
+ * Returns NULL if `name' is not a known zone abbreviation.
+ */
+static const struct tz_t *lookup_timezone(const char *name)
+{
+  char lc[5]; /* lowercased copy for the final verification compare */
+  uint32_t key = 0;
+  size_t i;
+  const struct tz_t *tz;
+
+  for (i = 0; name[i]; i++)
+  {
+    char c = name[i];
+
+    if (i >= 4)
+      return NULL; /* longer than any known zone name */
+    if (c >= 'A' && c <= 'Z')
+      c += 'a' - 'A';
+    lc[i] = c;
+    key |= (uint32_t)(unsigned char)c << (8 * i);
+  }
+  lc[i] = '\0';
+
+  tz = &TimeZones[(uint32_t)(key * TZ_HASH_MULT) >> TZ_HASH_SHIFT];
+  if (tz->tzname[0] && strcmp(tz->tzname, lc) == 0)
+    return tz;
+  return NULL;
+}
 
 /* parses a date string in RFC822 format:
  *
@@ -1008,12 +1054,7 @@ time_t mutt_parse_date(const char *s, HEADER *h)
         {
           const struct tz_t *tz;
 
-          tz = bsearch(ptz, TimeZones, sizeof TimeZones/sizeof(struct tz_t),
-                       sizeof(struct tz_t),
-                       (int (*)(const void *, const void *)) ascii_strcasecmp
-                       /* This is safe to do: A pointer to a struct equals
-                        * a pointer to its first element*/);
-
+          tz = lookup_timezone(ptz);
           if (tz)
           {
             zhours = tz->zhours;
@@ -1055,7 +1096,6 @@ time_t mutt_parse_date(const char *s, HEADER *h)
 
   return (mutt_mktime(&tm, 0) + tz_offset);
 }
-
 /* extract the first substring that looks like a message-id.
  * call back with NULL for more (like strtok).
  *
