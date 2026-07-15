@@ -623,9 +623,11 @@ static int tls_compare_certificates(const gnutls_datum_t *peercert)
     }
     /* find start of next cert */
     ptr = (unsigned char *)strstr((char*)ptr + 1, CERT_SEP);
-
-    b64_data.size = b64_data.size - (ptr - b64_data.data);
-    b64_data.data = ptr;
+    if (ptr)
+    {
+      b64_data.size = b64_data.size - (ptr - b64_data.data);
+      b64_data.data = ptr;
+    }
 
     if (cert.size == peercert->size)
     {
