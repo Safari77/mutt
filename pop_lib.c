@@ -425,6 +425,13 @@ int pop_query_d(POP_DATA *pop_data, char *buf, size_t buflen, char *msg)
   if (pop_data->status != POP_CONNECTED)
     return -1;
 
+  c = strpbrk(buf, " \r\n");
+  if (!c)
+  {
+    snprintf(pop_data->err_msg, sizeof(pop_data->err_msg), "Invalid POP command");
+    return -2;
+  }
+
 #ifdef DEBUG
   /* print msg instead of real command */
   if (msg)
@@ -436,7 +443,6 @@ int pop_query_d(POP_DATA *pop_data, char *buf, size_t buflen, char *msg)
 
   mutt_socket_write_d(pop_data->conn, buf, -1, dbg);
 
-  c = strpbrk(buf, " \r\n");
   *c = '\0';
   snprintf(pop_data->err_msg, sizeof(pop_data->err_msg), "%s: ", buf);
 
