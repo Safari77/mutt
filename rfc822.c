@@ -962,7 +962,9 @@ ADDRESS *rfc822_append(ADDRESS **a, ADDRESS *b, int prune)
   return tmp;
 }
 
-/* incomplete. Only used to thwart the APOP MD5 attack (#2846). */
+#define MSGID_IS_ATOM(c) \
+  ((c) >= 33 && (c) <= 126 && !strchr("()<>@,;:\\\".[]", (c)))
+
 int rfc822_valid_msgid(const char *msgid)
 {
   /* msg-id         = "<" addr-spec ">"
@@ -985,27 +987,107 @@ int rfc822_valid_msgid(const char *msgid)
    * domain-ref     = atom
    * domain-literal = "[" *(dtext / quoted-pair) "]"
    */
-
-  unsigned int l, i;
+  const char *p;
+  size_t l;
 
   if (!msgid || !*msgid)
     return -1;
-
   l = mutt_strlen(msgid);
   if (l < 5) /* <atom@atom> */
     return -1;
   if (msgid[0] != '<' || msgid[l-1] != '>')
     return -1;
-  if (!(strrchr(msgid, '@')))
-    return -1;
 
-  /* TODO: complete parser */
-  for (i = 0; i < l; i++)
-    if ((unsigned char)msgid[i] > 127)
-      return -1;
+  p = msgid + 1;
+
+  /* local-part = word *("." word) */
+  for (;;)
+  {
+    const char *start = p;
+
+    if (*p == '"')
+    {
+      /* quoted-string = <"> *(qtext / quoted-pair) <"> */
+      p++;
+      while (*p != '"')
+      {
+        if (*p == '\\') /* quoted-pair = "\" CHAR */
+        {
+          p++;
+          if (*p == '\0' || (unsigned char)*p > 127)
+            return -1;
+        }
+        else if (*p == '\0' || *p == '\r' || /* qtext excludes CR, NUL, */
+                 (unsigned char)*p > 127)     /* and non-CHAR octets     */
+          return -1;
+        p++;
+      }
+      p++; /* closing <"> */
+    }
+    else
+    {
+      /* atom = 1*<CHAR except specials, SPACE, CTLs> */
+      while (MSGID_IS_ATOM((unsigned char)*p))
+        p++;
+      if (p == start) /* an atom must be non-empty */
+        return -1;
+    }
+
+    if (*p != '.')
+      break;
+    p++; /* another word must follow the "." */
+  }
+
+  if (*p != '@')
+    return -1;
+  p++;
+
+  /* domain = sub-domain *("." sub-domain) */
+  for (;;)
+  {
+    const char *start = p;
+
+    if (*p == '[')
+    {
+      /* domain-literal = "[" *(dtext / quoted-pair) "]" */
+      p++;
+      while (*p != ']')
+      {
+        if (*p == '\\') /* quoted-pair = "\" CHAR */
+        {
+          p++;
+          if (*p == '\0' || (unsigned char)*p > 127)
+            return -1;
+        }
+        else if (*p == '\0' || *p == '\r' || *p == '[' || /* dtext excludes  */
+                 (unsigned char)*p > 127)                  /* "[", CR, non-CHAR */
+          return -1;
+        p++;
+      }
+      p++; /* closing "]" */
+    }
+    else
+    {
+      /* sub-domain = domain-ref = atom */
+      while (MSGID_IS_ATOM((unsigned char)*p))
+        p++;
+      if (p == start)
+        return -1;
+    }
+
+    if (*p != '.')
+      break;
+    p++;
+  }
+
+  /* the parse must land exactly on the closing ">" and consume the string */
+  if (*p != '>' || p[1] != '\0')
+    return -1;
 
   return 0;
 }
+
+#undef MSGID_IS_ATOM
 
 #ifdef TESTING
 int safe_free(void **p)        /* __SAFE_FREE_CHECKED__ */
