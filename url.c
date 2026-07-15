@@ -255,17 +255,28 @@ int url_ciss_tobuffer(ciss_url_t *ciss, BUFFER *dest, int flags)
 
     if (ciss->user)
     {
-      char u[STRING];
-      url_pct_encode(u, sizeof(u), ciss->user);
+      /* Dynamically allocate for user string, max expansion is 3x plus null terminator */
+      size_t u_len = mutt_strlen(ciss->user) * 3 + 1;
+      char *u = safe_malloc(u_len);
+      url_pct_encode(u, u_len, ciss->user);
 
       if (flags & U_DECODE_PASSWD && ciss->pass)
       {
-        char p[STRING];
-        url_pct_encode(p, sizeof(p), ciss->pass);
+        /* Dynamically allocate for password string, max expansion is 3x plus null terminator */
+        size_t p_len = mutt_strlen(ciss->pass) * 3 + 1;
+        char *p = safe_malloc(p_len);
+        url_pct_encode(p, p_len, ciss->pass);
+
         mutt_buffer_add_printf(dest, "%s:%s@", u, p);
+
+        FREE(&p);
       }
       else
+      {
         mutt_buffer_add_printf(dest, "%s@", u);
+      }
+
+      FREE(&u);
     }
 
     if (strchr(ciss->host, ':'))
