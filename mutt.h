@@ -42,6 +42,10 @@
 #include <wchar.h>
 #include <wctype.h>
 
+#if __has_include(<features.h>)
+#include <features.h>
+#endif
+
 #ifndef _POSIX_PATH_MAX
 #include <limits.h>
 #endif
@@ -1211,5 +1215,26 @@ typedef struct
 #include "protos.h"
 #include "lib.h"
 #include "globals.h"
+
+#define barrier() asm volatile("": : :"memory")
+
+/**
+ * memzero_explicit - Fill a region of memory (e.g. sensitive
+ *                    keying data) with 0s.
+ * @s: Pointer to the start of the area.
+ * @count: The size of the area.
+ *
+ * memzero_explicit() doesn't need an arch-specific version as
+ * it just invokes the one of memset() implicitly.
+ */
+static inline void memzero_explicit(void *s, size_t count)
+{
+#if defined(__GLIBC_PREREQ) && __GLIBC_PREREQ(2, 43)
+    memset_explicit(s, 0, count);
+#else
+    memset(s, 0, count);
+    barrier();
+#endif
+}
 
 #endif /*MUTT_H*/
