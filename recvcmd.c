@@ -728,7 +728,7 @@ static void attach_forward_msgs(FILE * fp, HEADER * hdr,
     }
   }
   else
-    mutt_free_header(&tmphdr);
+    goto cleanup;
 
   if (option(OPTREVNAME))
     tmphdr->env->from = attach_set_reverse_name(cur ? curhdr : NULL,
