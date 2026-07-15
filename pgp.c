@@ -481,7 +481,7 @@ int pgp_application_pgp_handler(BODY *m, STATE *s)
         if (mutt_strncmp("Charset: ", buf, 9) == 0)
         {
           size_t l = 0;
-          gpgcharset = safe_strdup(buf + 9);
+          mutt_str_replace(&gpgcharset, buf + 9);
           if ((l = mutt_strlen(gpgcharset)) > 0 && gpgcharset[l-1] == '\n')
             gpgcharset[l-1] = 0;
           if (mutt_check_charset(gpgcharset, 0) < 0)
