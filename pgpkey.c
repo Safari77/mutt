@@ -157,7 +157,7 @@ static const char *pgp_entry_fmt(char *dest,
       const char *cp;
       char buf2[SHORT_STRING], *p;
       int do_locales;
-      struct tm *tm;
+      struct tm tm_local;
       size_t len;
       int expires = (op == '(');
 
@@ -178,6 +178,10 @@ static const char *pgp_entry_fmt(char *dest,
         if (*cp == '%')
         {
           cp++;
+          /* Prevent OOB read if the format string ends abruptly in '%' */
+          if (*cp == '\0')
+            break;
+
           if (len >= 2)
           {
             *p++ = '%';
@@ -197,11 +201,11 @@ static const char *pgp_entry_fmt(char *dest,
       *p = 0;
 
 
-      tm = localtime(expires ? &key->exp_time : &key->gen_time);
+      localtime_r(expires ? &key->exp_time : &key->gen_time, &tm_local);
 
       if (!do_locales)
         setlocale(LC_TIME, "C");
-      strftime(buf2, sizeof(buf2), dest, tm);
+      strftime(buf2, sizeof(buf2), dest, &tm_local);
       if (!do_locales)
         setlocale(LC_TIME, "");
 
