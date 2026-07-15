@@ -854,6 +854,7 @@ static void pipe_attachment(FILE *fp, BODY *b, STATE *state)
       mutt_decode_attachment(b, state);
       safe_fclose(&unstuff_fp);
       state->fpout = filter_fp;
+      mutt_rfc3676_space_unstuff_attachment(b, mutt_b2s(unstuff_tempfile));
 
       unstuff_fp = safe_fopen(mutt_b2s(unstuff_tempfile), "r");
       if (unstuff_fp == NULL)
