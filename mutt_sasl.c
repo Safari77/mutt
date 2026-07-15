@@ -394,6 +394,11 @@ static int mutt_sasl_cb_log(void *context, int priority, const char *message)
 
 void mutt_sasl_done(void)
 {
+  if (secret_ptr)
+  {
+    memzero_explicit(secret_ptr->data, secret_ptr->len);
+    FREE(&secret_ptr);
+  }
   sasl_done();
 }
 
