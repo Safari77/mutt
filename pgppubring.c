@@ -309,7 +309,15 @@ static void skip_bignum(unsigned char *buff, size_t l, size_t j,
 
   do
   {
+    if (j + 1 >= l) // Validate we have enough bytes to read the length
+        break;
+
     len = (buff[j] << 8) + buff[j + 1];
+
+    // Validate the bignum payload fits within the packet before skipping
+    if (j + 2 + (len + 7) / 8 > l)
+        break;
+
     j += (len + 7) / 8 + 2;
   }
   while (j <= l && --n > 0);
