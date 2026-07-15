@@ -191,7 +191,7 @@ bail:
   if (!mutt_strncmp(inbuf, "+ ", 2))
   {
     snprintf(buf, bufsize, "*\r\n");
-    if (pop_query(pop_data, buf, sizeof(buf)) == -1)
+    if (pop_query(pop_data, buf, bufsize) == -1)
     {
       FREE(&buf);
       return POP_A_SOCKET;
