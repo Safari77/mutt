@@ -516,6 +516,7 @@ static int mutt_sasl_conn_read(CONNECTION *conn, char *buf, size_t len)
   int rc;
 
   unsigned int olen;
+  char rxbuf[MUTT_SASL_MAXBUF];
 
   sasldata = (SASL_DATA*) conn->sockdata;
 
@@ -542,11 +543,11 @@ static int mutt_sasl_conn_read(CONNECTION *conn, char *buf, size_t len)
     do
     {
       /* call the underlying read function to fill the buffer */
-      rc = (sasldata->msasl_read)(conn, buf, len);
+      rc = (sasldata->msasl_read)(conn, rxbuf, sizeof(rxbuf));
       if (rc <= 0)
         goto out;
 
-      rc = sasl_decode(sasldata->saslconn, buf, rc, &sasldata->buf,
+      rc = sasl_decode(sasldata->saslconn, rxbuf, rc, &sasldata->buf,
                        &sasldata->blen);
       if (rc != SASL_OK)
       {
