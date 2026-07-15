@@ -1626,6 +1626,8 @@ static int link_threads(HEADER *parent, HEADER *child, CONTEXT *ctx)
 {
   if (child == parent)
     return 0;
+  if (!parent->env->message_id)
+    return 0;
 
   mutt_break_thread(child);
 
