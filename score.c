@@ -182,12 +182,14 @@ int mutt_parse_unscore(BUFFER *buf, BUFFER *s, union pointer_long_t udata, BUFFE
         last = tmp;
         tmp = tmp->next;
         mutt_pattern_free(&last->pat);
+        FREE(&last->str);
         FREE(&last);
       }
       Score = NULL;
     }
     else
     {
+      last = NULL; /* Reset 'last' so subsequent iterations don't corrupt the list */
       for (tmp = Score; tmp; last = tmp, tmp = tmp->next)
       {
         if (!mutt_strcmp(buf->data, tmp->str))
@@ -196,7 +198,9 @@ int mutt_parse_unscore(BUFFER *buf, BUFFER *s, union pointer_long_t udata, BUFFE
             last->next = tmp->next;
           else
             Score = tmp->next;
+
           mutt_pattern_free(&tmp->pat);
+          FREE(&tmp->str);
           FREE(&tmp);
           /* there should only be one score per pattern, so we can stop here */
           break;
