@@ -191,28 +191,35 @@ int url_parse_ciss(ciss_url_t *ciss, char *src)
   return ciss_parse_userhost(ciss, tmp);
 }
 
+/* Percent-encode src into dst (buffer of size l) per RFC 3986:
+ * unreserved characters (ALPHA / DIGIT / "-" / "." / "_" / "~")
+ * pass through, everything else is encoded as %XX. */
 static void url_pct_encode(char *dst, size_t l, const char *src)
 {
   static const char *alph = "0123456789ABCDEF";
 
+  if (!dst || l == 0)
+    return;
   *dst = 0;
   l--;
   while (src && *src && l)
   {
-    if (strchr("/:%", *src))
+    unsigned char c = (unsigned char) *src;
+    if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+        (c >= '0' && c <= '9') ||
+        c == '-' || c == '.' || c == '_' || c == '~')
     {
-      if (l < 3)
-        break;
-
-      *dst++ = '%';
-      *dst++ = alph[(*src >> 4) & 0xf];
-      *dst++ = alph[*src & 0xf];
-      src++;
-      l -= 3;
+      *dst++ = *src++;
+      l--;
       continue;
     }
-    *dst++ = *src++;
-    l--;
+    if (l < 3)
+      break;
+    *dst++ = '%';
+    *dst++ = alph[(c >> 4) & 0xf];
+    *dst++ = alph[c & 0xf];
+    src++;
+    l -= 3;
   }
   *dst = 0;
 }
