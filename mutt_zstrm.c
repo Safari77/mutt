@@ -35,6 +35,8 @@ typedef struct
     unsigned int pos;
     unsigned int conn_eof : 1;
     unsigned int stream_eof : 1;
+    unsigned int output_full : 1;   /* last inflate() filled avail_out; zlib may
+                                       hold pending output — drain before read */
   } read, write;
 
   /* underlying stream */
@@ -91,20 +93,27 @@ static int mutt_zstrm_read(CONNECTION *conn, char *buf, size_t len)
 {
   zstrmctx *zctx = conn->sockdata;
   int rc = 0;
-  int zrc;
+  int zrc = Z_OK;
+  size_t produced;
 
 retry:
   if (zctx->read.stream_eof)
     return 0;
-
   /* when avail_out was 0 on last call, we need to call inflate again,
    * because more data might be available using the current input, so
    * avoid callling read on the underlying stream in that case (for it
-   * might block) */
-  if (zctx->read.pos == 0 && !zctx->read.conn_eof)
+   * might block).
+   * output_full carries that "avail_out was 0" fact across calls; zrc is
+   * local and reset each entry, so it can only cover the in-call retry.
+   * Also require room in the input buffer (pos < len), so a full buffer
+   * never triggers a zero-length read that a backend might report as EOF. */
+  if (!zctx->read.conn_eof && !zctx->read.output_full &&
+      (zctx->read.pos == 0 || zrc == Z_BUF_ERROR) &&
+      zctx->read.pos < zctx->read.len)
   {
     rc = zctx->next_conn.conn_read(&zctx->next_conn,
-                                   zctx->read.buf, zctx->read.len);
+                                   zctx->read.buf + zctx->read.pos,
+                                   zctx->read.len - zctx->read.pos);
     muttdbg(4, "zstrm_read: consuming data from next stream: %d bytes", rc);
     if (rc < 0)
       return rc;
@@ -113,29 +122,30 @@ retry:
     else
       zctx->read.pos += rc;
   }
-
   zctx->read.z.avail_in = (uInt) zctx->read.pos;
   zctx->read.z.next_in = (Bytef*) zctx->read.buf;
   zctx->read.z.avail_out = (uInt) len;
   zctx->read.z.next_out = (Bytef*) buf;
-
   zrc = inflate(&zctx->read.z, Z_SYNC_FLUSH);
   muttdbg(4, "zstrm_read: rc=%d, consumed %u/%u bytes, produced %u/%u bytes",
           zrc, zctx->read.pos - zctx->read.z.avail_in, zctx->read.pos,
           len - zctx->read.z.avail_out, len);
-
+  /* remember whether the output buffer was filled completely: if so, zlib
+   * may still hold pending output and we must inflate again (draining it)
+   * before we're allowed to block on the underlying stream */
+  zctx->read.output_full = (zctx->read.z.avail_out == 0);
+  /* bytes produced into the caller's buffer this call */
+  produced = len - (size_t) zctx->read.z.avail_out;
   /* shift any remaining input data to the front of the buffer */
   if ((Bytef*) zctx->read.buf != zctx->read.z.next_in)
   {
     memmove(zctx->read.buf, zctx->read.z.next_in, zctx->read.z.avail_in);
     zctx->read.pos = zctx->read.z.avail_in;
   }
-
   switch (zrc)
   {
     case Z_OK:          /* progress has been made */
-      zrc = len - zctx->read.z.avail_out;  /* "returned" bytes */
-      if (zrc == 0)
+      if (produced == 0)
       {
         /* there was progress, so must have been reading input */
         muttdbg(4, "zstrm_read: inflate just consumed");
@@ -144,7 +154,6 @@ retry:
       break;
     case Z_STREAM_END:  /* everything flushed, nothing remaining */
       muttdbg(4, "zstrm_read: inflate returned Z_STREAM_END.");
-      zrc = len - zctx->read.z.avail_out;  /* "returned" bytes */
       zctx->read.stream_eof = 1;
       break;
     case Z_BUF_ERROR:  /* no progress was possible */
@@ -153,16 +162,22 @@ retry:
         muttdbg(5, "zstrm_read: inflate returned Z_BUF_ERROR. retrying.");
         goto retry;
       }
-      zrc = 0;
+      /* underlying stream ended but zlib never reported Z_STREAM_END and
+       * can't make progress: the compressed stream is truncated. If we
+       * managed to produce some output this call, hand it back now and let
+       * the next call surface the error; otherwise report it. */
+      if (produced == 0)
+      {
+        muttdbg(4, "zstrm_read: truncated stream (Z_BUF_ERROR at eof). aborting.");
+        return -1;
+      }
       break;
     default:
       /* bail on other rcs, such as Z_DATA_ERROR, or Z_MEM_ERROR */
       muttdbg(4, "zstrm_read: inflate returned %d. aborting.", zrc);
-      zrc = -1;
-      break;
+      return -1;
   }
-
-  return zrc;
+  return (int) produced;
 }
 
 static int mutt_zstrm_poll(CONNECTION *conn, time_t wait_secs)
