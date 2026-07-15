@@ -97,7 +97,7 @@ static void exit_handler(int sig)
 #endif
 #endif
   exit_print_string(Exiting_L10N ? Exiting_L10N : "...  Exiting.\n");
-  exit(0);
+  _exit(0);
 }
 
 /* These are gettext() translated in advance because that
