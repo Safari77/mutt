@@ -811,7 +811,7 @@ int mutt_prepare_template(FILE *fp, CONTEXT *ctx, HEADER *newhdr, HEADER *hdr,
   /* Fix encryption flags. */
 
   /* No inline if multipart. */
-  if (WithCrypto && (newhdr->security & INLINE) && newhdr->content->next)
+  if (WithCrypto && (newhdr->security & INLINE) && newhdr->content && newhdr->content->next)
     newhdr->security &= ~INLINE;
 
   /* Do we even support multiple mechanisms? */
