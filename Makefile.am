@@ -56,7 +56,7 @@ DEFS=-DPKGDATADIR=\"$(pkgdatadir)\" -DSYSCONFDIR=\"$(sysconfdir)\" \
 	-DBINDIR=\"$(bindir)\" -DMUTTLOCALEDIR=\"$(datadir)/locale\" \
 	-DHAVE_CONFIG_H=1
 
-AM_CPPFLAGS=-I. -I$(top_srcdir) $(IMAP_INCLUDES) $(AUTOCRYPT_INCLUDES) $(GPGME_CFLAGS) $(GPG_ERROR_CFLAGS)
+AM_CPPFLAGS=-I. -I$(top_srcdir) $(IMAP_INCLUDES) $(AUTOCRYPT_INCLUDES) $(GPGME_CFLAGS) $(GPG_ERROR_CFLAGS) $(GLIB_CFLAGS)
 
 # This option allows `make distcheck` to run without encountering
 # setgid errors.
@@ -131,7 +131,7 @@ DISTCLEANFILES= flea smime_keys txt2c po/$(PACKAGE).pot
 
 ACLOCAL_AMFLAGS = -I m4
 
-LDADD = $(LIBOBJS) $(LIBINTL)
+LDADD = $(LIBOBJS) $(LIBINTL) $(GLIB_LIBS)
 
 flea: $(srcdir)/muttbug
 	cp $(srcdir)/muttbug flea

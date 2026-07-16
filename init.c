@@ -3808,7 +3808,7 @@ void mutt_init(int skip_sys_rc, LIST *commands)
 
   Groups = hash_create(1031, 0);
   /* reverse alias keys need to be strdup'ed because of idna conversions */
-  ReverseAlias = hash_create(1031, MUTT_HASH_STRCASECMP | MUTT_HASH_STRDUP_KEYS |
+  ReverseAlias = hash_create(1031, MUTT_HASH_UTF8_CASEFOLD | MUTT_HASH_STRDUP_KEYS |
                              MUTT_HASH_ALLOW_DUPS);
 
   mutt_menu_init();

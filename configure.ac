@@ -435,6 +435,12 @@ AC_CHECK_TYPE(ssize_t, [],
 
 AC_CHECK_FUNCS(fgetpos memmove memccpy setegid strerror getrandom)
 
+PKG_PROG_PKG_CONFIG([0.21])
+PKG_CHECK_MODULES([GLIB], [glib-2.0 >= 2.52])
+AC_SUBST(GLIB_CFLAGS)
+AC_SUBST(GLIB_LIBS)
+MUTTLIBS="$MUTTLIBS $GLIB_LIBS"
+
 dnl random data functions
 AC_CHECK_HEADERS(sys/random.h)
 AC_CHECK_FUNCS(getrandom arc4random_buf)

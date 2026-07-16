@@ -1230,7 +1230,7 @@ void mutt_auto_subscribe(const char *mailto)
   ENVELOPE *lpenv;
 
   if (!AutoSubscribeCache)
-    AutoSubscribeCache = hash_create(200, MUTT_HASH_STRCASECMP | MUTT_HASH_STRDUP_KEYS);
+    AutoSubscribeCache = hash_create(200, MUTT_HASH_UTF8_CASEFOLD | MUTT_HASH_STRDUP_KEYS);
 
   if (!mailto || hash_find(AutoSubscribeCache, mailto))
     return;

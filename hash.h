@@ -35,15 +35,27 @@ struct hash_elem
 typedef struct
 {
   int nelem;
-  unsigned int strdup_keys : 1;      /* if set, the key->strkey is strdup'ed */
+  unsigned int strdup_keys : 1;      /* if set, the stored key->strkey is an
+                                        allocated copy owned by the table */
   unsigned int allow_dups : 1;       /* if set, duplicate keys are allowed */
+  unsigned int utf8_casefold : 1;    /* if set, string keys are stored and
+                                        looked up in canonical form:
+                                        g_utf8_casefold() + NFC normalization
+                                        (invalid UTF-8 is sanitized first) */
   struct hash_elem **table;
   unsigned int (*gen_hash)(union hash_key, unsigned int);
   int (*cmp_key)(union hash_key, union hash_key);
 } HASH;
 
 /* flags for hash_create() */
-#define MUTT_HASH_STRCASECMP   (1<<0)   /* use strcasecmp() to compare keys */
+#define MUTT_HASH_UTF8_CASEFOLD (1<<0)  /* case- and normalization-insensitive
+                                           UTF-8 keys: keys are casefolded and
+                                           NFC-normalized on insert and lookup;
+                                           invalid UTF-8 is replaced (U+FFFD)
+                                           rather than rejected. Implies
+                                           MUTT_HASH_STRDUP_KEYS. Note: keys
+                                           returned by hash_walk() are the
+                                           canonical form, not the original. */
 #define MUTT_HASH_STRDUP_KEYS  (1<<1)   /* make a copy of the keys */
 #define MUTT_HASH_ALLOW_DUPS   (1<<2)   /* allow duplicate keys to be inserted */
 

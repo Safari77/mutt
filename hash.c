@@ -23,7 +23,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <ctype.h>
+
+#include <glib.h>
 
 #include "mutt.h"
 
@@ -46,21 +47,43 @@ static int cmp_string_key(union hash_key a, union hash_key b)
   return mutt_strcmp(a.strkey, b.strkey);
 }
 
-static unsigned int gen_case_string_hash(union hash_key key, unsigned int n)
+/* Canonicalize a key for case-insensitive UTF-8 tables (MUTT_HASH_UTF8_CASEFOLD).
+ *
+ * 1. g_utf8_make_valid()   invalid byte sequences are replaced with U+FFFD,
+ *                          so arbitrary (possibly broken) input is processed
+ *                          without error by the glib UTF-8 functions below
+ * 2. g_utf8_casefold()     Unicode-aware case folding ("lowercasing" that also
+ *                          works outside ASCII, e.g. for internationalized
+ *                          email addresses)
+ * 3. g_utf8_normalize(NFC) canonically equivalent strings (precomposed vs.
+ *                          combining-mark forms) become byte-identical, so a
+ *                          plain strcmp()/byte hash matches them
+ *
+ * Folding is done before NFC normalization because casefolding can produce a
+ * denormalized string; this approximates Unicode canonical caseless matching.
+ *
+ * Returns a newly allocated string in mutt-managed memory (safe_strdup), so
+ * the existing FREE()-based key cleanup in delete/destroy keeps working.
+ *
+ * Note: distinct invalid byte sequences may both fold to the same U+FFFD
+ * replacement form and thus compare equal; this is accepted behavior.
+ */
+static char *utf8_normal_key(const char *strkey)
 {
-  unsigned int h = 0;
-  const unsigned char *s = (const unsigned char *)key.strkey;
+  char *valid, *folded, *normalized, *result;
 
-  while (*s)
-    h += (h << 7) + tolower(*s++);
-  h = (h * SOMEPRIME) % n;
+  valid = g_utf8_make_valid(strkey, -1);
+  folded = g_utf8_casefold(valid, -1);
+  normalized = g_utf8_normalize(folded, -1, G_NORMALIZE_NFC);
 
-  return h;
-}
+  /* normalized cannot be NULL here since the input was made valid, but be
+   * defensive and fall back to the folded string */
+  result = safe_strdup(normalized ? normalized : folded);
+  g_free(normalized);
+  g_free(folded);
+  g_free(valid);
 
-static int cmp_case_string_key(union hash_key a, union hash_key b)
-{
-  return mutt_strcasecmp(a.strkey, b.strkey);
+  return result;
 }
 
 static unsigned int gen_int_hash(union hash_key key, unsigned int n)
@@ -90,15 +113,17 @@ static HASH *new_hash(int nelem)
 HASH *hash_create(int nelem, int flags)
 {
   HASH *table = new_hash(nelem);
-  if (flags & MUTT_HASH_STRCASECMP)
+  /* Keys are always hashed/compared bytewise; case-insensitive tables store
+   * and look up keys in canonical (casefolded + NFC) form instead of using a
+   * special hash/compare pair, see utf8_normal_key(). */
+  table->gen_hash = gen_string_hash;
+  table->cmp_key = cmp_string_key;
+  if (flags & MUTT_HASH_UTF8_CASEFOLD)
   {
-    table->gen_hash = gen_case_string_hash;
-    table->cmp_key = cmp_case_string_key;
-  }
-  else
-  {
-    table->gen_hash = gen_string_hash;
-    table->cmp_key = cmp_string_key;
+    table->utf8_casefold = 1;
+    /* the canonicalized key is always a fresh allocation owned by the
+     * table, so strdup_keys is implied */
+    table->strdup_keys = 1;
   }
   if (flags & MUTT_HASH_STRDUP_KEYS)
     table->strdup_keys = 1;
@@ -167,11 +192,15 @@ int hash_insert(HASH * table, const char *strkey, void *data)
   union hash_key key;
   int r;
 
-  key.strkey = table->strdup_keys ? safe_strdup(strkey) : strkey;
+  if (table->utf8_casefold)
+    key.strkey = utf8_normal_key(strkey);
+  else
+    key.strkey = table->strdup_keys ? safe_strdup(strkey) : strkey;
 
   r = union_hash_insert(table, key, data);
 
-  /* If insertion fails (e.g., duplicate rejected) and we duplicated the key, free it */
+  /* If insertion fails (e.g., duplicate rejected) and we allocated the key
+   * (strdup'ed or canonicalized), free it */
   if (r == -1 && table->strdup_keys)
   {
     FREE(&key.strkey);
@@ -217,15 +246,35 @@ static void *union_hash_find(const HASH *table, union hash_key key)
 void *hash_find(const HASH *table, const char *strkey)
 {
   union hash_key key;
+  char *tmpkey = NULL;
+  void *data;
+
+  if (!table)
+    return NULL;
+
+  if (table->utf8_casefold)
+    strkey = tmpkey = utf8_normal_key(strkey);
   key.strkey = strkey;
-  return union_hash_find(table, key);
+  data = union_hash_find(table, key);
+  FREE(&tmpkey);
+  return data;
 }
 
 struct hash_elem *hash_find_elem(const HASH *table, const char *strkey)
 {
   union hash_key key;
+  char *tmpkey = NULL;
+  struct hash_elem *elem;
+
+  if (!table)
+    return NULL;
+
+  if (table->utf8_casefold)
+    strkey = tmpkey = utf8_normal_key(strkey);
   key.strkey = strkey;
-  return union_hash_find_elem(table, key);
+  elem = union_hash_find_elem(table, key);
+  FREE(&tmpkey);
+  return elem;
 }
 
 void *int_hash_find(const HASH *table, unsigned int intkey)
@@ -238,14 +287,20 @@ void *int_hash_find(const HASH *table, unsigned int intkey)
 struct hash_elem *hash_find_bucket(const HASH *table, const char *strkey)
 {
   union hash_key key;
+  char *tmpkey = NULL;
   int hash;
+  struct hash_elem *elem;
 
   if (!table)
     return NULL;
 
+  if (table->utf8_casefold)
+    strkey = tmpkey = utf8_normal_key(strkey);
   key.strkey = strkey;
   hash = table->gen_hash(key, table->nelem);
-  return table->table[hash];
+  elem = table->table[hash];
+  FREE(&tmpkey);
+  return elem;
 }
 
 static void union_hash_delete(HASH *table, union hash_key key, const void *data,
@@ -287,8 +342,16 @@ void hash_delete(HASH *table, const char *strkey, const void *data,
                  void (*destroy)(void *))
 {
   union hash_key key;
+  char *tmpkey = NULL;
+
+  if (!table)
+    return;
+
+  if (table->utf8_casefold)
+    strkey = tmpkey = utf8_normal_key(strkey);
   key.strkey = strkey;
   union_hash_delete(table, key, data, destroy);
+  FREE(&tmpkey);
 }
 
 void int_hash_delete(HASH *table, unsigned int intkey, const void *data,
