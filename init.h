@@ -1251,7 +1251,7 @@ struct option_t MuttVars[] = {
   ** you use ``+'' or ``='' for any other variables since expansion takes place
   ** when handling the ``$mailboxes'' command.
   */
-  { "folder_format",    DT_STR,  R_MENU, {.p=&FolderFormat}, {.p="%2C %t %N %F %2l %-8.8u %-8.8g %8s %d %f"} },
+  { "folder_format",    DT_STR,  R_MENU, {.p=&FolderFormat}, {.p="%2C %t %N %F %4l %-8.8u %-8.8g %8s %d %f"} },
   /*
   ** .pp
   ** This variable allows you to customize the file browser display to your
