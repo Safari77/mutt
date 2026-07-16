@@ -3372,10 +3372,9 @@ static const char *crypt_entry_fmt(char *dest,
         }
 
         if (!do_locales)
-          setlocale(LC_TIME, "C");
-        strftime(buf2, sizeof(buf2), dest, tm);
-        if (!do_locales)
-          setlocale(LC_TIME, "");
+          strftime_l(buf2, sizeof(buf2), dest, tm, loc_time_c);
+        else
+          strftime(buf2, sizeof(buf2), dest, tm);
 
         snprintf(fmt, sizeof(fmt), "%%%ss", prefix);
         snprintf(dest, destlen, fmt, buf2);

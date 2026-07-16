@@ -900,6 +900,25 @@ int main(int argc, char **argv, char **environ)
   mutt_init(flags & MUTT_NOSYSRC, commands);
   mutt_free_list(&commands);
 
+  loc_time_c = newlocale(LC_TIME_MASK, "C", (locale_t)0);
+  if (loc_time_c == (locale_t)0) {
+    fprintf(stderr, "Error while getting locale for LC_TIME=\"C\": %s\n", strerror(errno));
+    goto cleanup_and_exit;
+  }
+  char *attloc = AttributionLocale ?: "";
+  locale_t env_loc = newlocale(LC_ALL_MASK, "", (locale_t)0);
+  if (env_loc == (locale_t)0) {
+    fprintf(stderr, "Error loading base environment locale: %s\n", strerror(errno));
+    goto cleanup_and_exit;
+  }
+  loc_time_attribution = newlocale(LC_TIME_MASK, attloc, env_loc);
+
+  if (loc_time_attribution == (locale_t)0) {
+    fprintf(stderr, "Error while getting attribution_locale for LC_TIME=\"%s\": %s\n",
+            attloc, strerror(errno));
+    loc_time_attribution = env_loc;
+  }
+
   /* Initialize crypto backends.  */
   crypt_init();
 

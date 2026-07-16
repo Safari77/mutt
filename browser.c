@@ -310,10 +310,9 @@ folder_format_str(char *dest, size_t destlen, size_t col, int cols, char op, con
         }
 
         if (!do_locales)
-          setlocale(LC_TIME, "C");
-        strftime(date, sizeof(date), t_fmt, localtime(&folder->ff->mtime));
-        if (!do_locales)
-          setlocale(LC_TIME, "");
+          strftime_l(date, sizeof(date), t_fmt, localtime(&folder->ff->mtime), loc_time_c);
+        else
+          strftime(date, sizeof(date), t_fmt, localtime(&folder->ff->mtime));
 
         mutt_format_s(dest, destlen, fmt, date);
       }

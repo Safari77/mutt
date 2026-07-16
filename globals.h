@@ -39,6 +39,8 @@ WHERE char *AttachSaveDir;
 WHERE char *AttachSep;
 WHERE char *Attribution;
 WHERE char *AttributionLocale;
+WHERE locale_t loc_time_attribution;
+WHERE locale_t loc_time_c;
 WHERE char *AttachCharset;
 WHERE char *AttachFormat;
 #ifdef USE_AUTOCRYPT

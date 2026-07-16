@@ -163,9 +163,9 @@ be_include_messages(char *msg, char **buf, int *bufmax, int *buflen,
       /* add the attribution */
       if (Attribution)
       {
-        setlocale(LC_TIME, NONULL(AttributionLocale));
+        locale_t old_loc = uselocale(loc_time_attribution);
         mutt_make_string(tmp, sizeof(tmp) - 1, Attribution, Context, Context->hdrs[n]);
-        setlocale(LC_TIME, "");
+        uselocale(old_loc);
         strcat(tmp, "\n");     /* __STRCAT_CHECKED__ */
       }
 

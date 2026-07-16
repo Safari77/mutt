@@ -430,10 +430,9 @@ hdr_format_str(char *dest,
       }
 
       if (!do_locales)
-        setlocale(LC_TIME, "C");
-      strftime(buf2, sizeof(buf2), dest, tm);
-      if (!do_locales)
-        setlocale(LC_TIME, "");
+        strftime_l(buf2, sizeof(buf2), dest, tm, loc_time_c);
+      else
+        strftime(buf2, sizeof(buf2), dest, tm);
 
       mutt_format_s(dest, destlen, prefix, buf2);
       if (len > 0 && op != 'd' && op != 'D') /* Skip ending op */

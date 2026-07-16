@@ -204,10 +204,9 @@ static const char *pgp_entry_fmt(char *dest,
       localtime_r(expires ? &key->exp_time : &key->gen_time, &tm_local);
 
       if (!do_locales)
-        setlocale(LC_TIME, "C");
-      strftime(buf2, sizeof(buf2), dest, &tm_local);
-      if (!do_locales)
-        setlocale(LC_TIME, "");
+        strftime_l(buf2, sizeof(buf2), dest, &tm_local, loc_time_c);
+      else
+        strftime(buf2, sizeof(buf2), dest, &tm_local);
 
       snprintf(fmt, sizeof(fmt), "%%%ss", prefix);
       snprintf(dest, destlen, fmt, buf2);
