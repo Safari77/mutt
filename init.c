@@ -635,6 +635,68 @@ static int remove_from_replace_list(REPLACE_LIST **list, const char *pat)
   return nremoved;
 }
 
+void mutt_update_attribution_locale(void)
+{
+  static HASH *failed_locales = NULL;
+  static char *cached_locale = NULL;
+
+  /* AttributionLocale might be NULL if unset */
+  char *attloc = AttributionLocale ? AttributionLocale : "";
+
+  /* Cache check: avoid setting locales again unnecessarily if the same locale is requested */
+  if (cached_locale && mutt_strcmp(attloc, cached_locale) == 0)
+    return;
+
+  /* Initialize the hash table on first run */
+  if (!failed_locales)
+    failed_locales = hash_create(17, 0);
+
+  locale_t env_loc = newlocale(LC_ALL_MASK, "", (locale_t)0);
+  if (env_loc == (locale_t)0)
+  {
+    int saved_errno = errno;
+    if (!hash_find(failed_locales, "__base_env__"))
+    {
+      mutt_error("Error loading base environment locale: %s", strerror(saved_errno));
+      mutt_sleep(1);
+      hash_insert(failed_locales, "__base_env__", (void *)"failed");
+    }
+    /* Keep the previous loc_time_attribution and cache intact so a retry
+       actually retries */
+    return;
+  }
+
+  locale_t new_loc = newlocale(LC_TIME_MASK, attloc, env_loc);
+  if (new_loc == (locale_t)0)
+  {
+    int saved_errno = errno;
+    if (!hash_find(failed_locales, attloc))
+    {
+      mutt_error("Error while getting attribution_locale for LC_TIME=\"%s\": %s",
+                 attloc, strerror(saved_errno));
+      mutt_sleep(1);
+      hash_insert(failed_locales, safe_strdup(attloc), (void *)"failed");
+    }
+
+    /* Fallback underlying locale pointer to base environment locale ($LC_TIME) */
+    new_loc = env_loc;
+
+    /* Reset the user-facing Mutt configuration variable back to "" */
+    FREE(&AttributionLocale);
+    attloc = "";
+  }
+
+  /* Free the existing locale object if it has been initialized */
+  if (loc_time_attribution)
+    freelocale(loc_time_attribution);
+  loc_time_attribution = new_loc;
+
+  /* Update the cache with the locale that is actually in effect */
+  FREE(&cached_locale);
+  cached_locale = safe_strdup(attloc);
+  if (!AttributionLocale)
+    AttributionLocale = safe_strdup(attloc);
+}
 
 static void remove_from_list(LIST **l, const char *str)
 {
@@ -2501,6 +2563,11 @@ static int parse_set(BUFFER *tmp, BUFFER *s, union pointer_long_t udata, BUFFER 
           *((char **) MuttVars[idx].data.p) = safe_strdup(tmp->data);
           if (mutt_strcmp(MuttVars[idx].option, "charset") == 0)
             mutt_set_charset(Charset);
+
+          if (mutt_strcmp (MuttVars[idx].option, "attribution_locale") == 0)
+          {
+            mutt_update_attribution_locale();
+          }
         }
         else if (DTYPE(MuttVars[idx].type) == DT_MBCHARTBL)
         {

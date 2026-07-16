@@ -298,6 +298,7 @@ short mutt_ts_capability(void);
 void mutt_unblock_signals(void);
 void mutt_unblock_signals_system(int);
 void mutt_update_encoding(BODY *a);
+void mutt_update_attribution_locale(void);
 void mutt_version(void);
 void mutt_view_attachments(HEADER *);
 void mutt_write_address_list(ADDRESS *adr, FILE *fp, int linelen, int display);
