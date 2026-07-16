@@ -1192,11 +1192,13 @@ static int get_micalg(gpgme_ctx_t ctx, int use_smime, char *buf, size_t buflen)
 static void print_time(time_t t, STATE *s)
 {
   char p[STRING];
+  struct tm tm_local;
 
+  localtime_r(&t, &tm_local);
 #ifdef HAVE_LANGINFO_D_T_FMT
-  strftime(p, sizeof(p), nl_langinfo(D_T_FMT), localtime(&t));
+  strftime(p, sizeof(p), nl_langinfo(D_T_FMT), &tm_local);
 #else
-  strftime(p, sizeof(p), "%c", localtime(&t));
+  strftime(p, sizeof(p), "%c", &tm_local);
 #endif
   state_puts(p, s);
 }
@@ -2374,6 +2376,7 @@ static int pgp_gpgme_extract_keys(gpgme_data_t keydata, FILE **fp)
   int more;
   int rc = -1;
   time_t tt;
+  struct tm tm_local;
 
 #if GPGME_VERSION_NUMBER >= 0x010900 /* gpgme >= 1.9.0 */
   legacy_api = !have_gpg_version("2.1.14");
@@ -2449,7 +2452,8 @@ static int pgp_gpgme_extract_keys(gpgme_data_t keydata, FILE **fp)
       if (len > 8)
         shortid += len - 8;
       tt = subkey->timestamp;
-      strftime(date, sizeof(date), "%Y-%m-%d", localtime(&tt));
+      localtime_r(&tt, &tm_local);
+      strftime(date, sizeof(date), "%Y-%m-%d", &tm_local);
 
       fprintf(*fp, "%s %5.5s %d/%8s %s\n",
               more ? "sub" : "pub",
@@ -3321,7 +3325,7 @@ static const char *crypt_entry_fmt(char *dest,
         const char *cp;
         char buf2[SHORT_STRING], *p;
         int do_locales;
-        struct tm *tm;
+        struct tm tm_local;
         size_t len;
         int expires = (op == '(');
 
@@ -3368,13 +3372,13 @@ static const char *crypt_entry_fmt(char *dest,
           else if (!expires && key->kobj->subkeys && (key->kobj->subkeys->timestamp > 0))
             tt = key->kobj->subkeys->timestamp;
 
-          tm = localtime(&tt);
+          localtime_r(&tt, &tm_local);
         }
 
         if (!do_locales)
-          strftime_l(buf2, sizeof(buf2), dest, tm, loc_time_c);
+          strftime_l(buf2, sizeof(buf2), dest, &tm_local, loc_time_c);
         else
-          strftime(buf2, sizeof(buf2), dest, tm);
+          strftime(buf2, sizeof(buf2), dest, &tm_local);
 
         snprintf(fmt, sizeof(fmt), "%%%ss", prefix);
         snprintf(dest, destlen, fmt, buf2);
@@ -3970,7 +3974,7 @@ static void print_key_info(gpgme_key_t key, FILE *fp)
   int idx;
   const char *s = NULL, *s2 = NULL;
   time_t tt = 0;
-  struct tm *tm;
+  struct tm tm_local;
   char shortbuf[SHORT_STRING];
   unsigned long aval = 0;
   const char *delim;
@@ -4024,11 +4028,11 @@ static void print_key_info(gpgme_key_t key, FILE *fp)
     {
       tt = key->subkeys->timestamp;
 
-      tm = localtime (&tt);
+      localtime_r(&tt, &tm_local);
 #ifdef HAVE_LANGINFO_D_T_FMT
-      strftime(shortbuf, sizeof shortbuf, nl_langinfo (D_T_FMT), tm);
+      strftime(shortbuf, sizeof shortbuf, nl_langinfo (D_T_FMT), &tm_local);
 #else
-      strftime(shortbuf, sizeof shortbuf, "%c", tm);
+      strftime(shortbuf, sizeof shortbuf, "%c", &tm_local);
 #endif
       fprintf(fp, "%*s%s\n", KeyInfoPadding[KIP_VALID_FROM],
               _(KeyInfoPrompts[KIP_VALID_FROM]), shortbuf);
@@ -4038,11 +4042,11 @@ static void print_key_info(gpgme_key_t key, FILE *fp)
     {
       tt = key->subkeys->expires;
 
-      tm = localtime (&tt);
+      localtime_r(&tt, &tm_local);
 #ifdef HAVE_LANGINFO_D_T_FMT
-      strftime(shortbuf, sizeof shortbuf, nl_langinfo (D_T_FMT), tm);
+      strftime(shortbuf, sizeof shortbuf, nl_langinfo (D_T_FMT), &tm_local);
 #else
-      strftime(shortbuf, sizeof shortbuf, "%c", tm);
+      strftime(shortbuf, sizeof shortbuf, "%c", &tm_local);
 #endif
       fprintf(fp, "%*s%s\n", KeyInfoPadding[KIP_VALID_TO],
               _(KeyInfoPrompts[KIP_VALID_TO]), shortbuf);
@@ -4185,11 +4189,11 @@ static void print_key_info(gpgme_key_t key, FILE *fp)
             {
               tt = subkey->timestamp;
 
-              tm = localtime(&tt);
+              localtime_r(&tt, &tm_local);
 #ifdef HAVE_LANGINFO_D_T_FMT
-              strftime(shortbuf, sizeof shortbuf, nl_langinfo (D_T_FMT), tm);
+              strftime(shortbuf, sizeof shortbuf, nl_langinfo (D_T_FMT), &tm_local);
 #else
-              strftime(shortbuf, sizeof shortbuf, "%c", tm);
+              strftime(shortbuf, sizeof shortbuf, "%c", &tm_local);
 #endif
               fprintf(fp, "%*s%s\n", KeyInfoPadding[KIP_VALID_FROM],
                       _(KeyInfoPrompts[KIP_VALID_FROM]), shortbuf);
@@ -4199,11 +4203,11 @@ static void print_key_info(gpgme_key_t key, FILE *fp)
             {
               tt = subkey->expires;
 
-              tm = localtime (&tt);
+              localtime_r(&tt, &tm_local);
 #ifdef HAVE_LANGINFO_D_T_FMT
-              strftime(shortbuf, sizeof shortbuf, nl_langinfo (D_T_FMT), tm);
+              strftime(shortbuf, sizeof shortbuf, nl_langinfo (D_T_FMT), &tm_local);
 #else
-              strftime(shortbuf, sizeof shortbuf, "%c", tm);
+              strftime(shortbuf, sizeof shortbuf, "%c", &tm_local);
 #endif
               fprintf(fp, "%*s%s\n", KeyInfoPadding[KIP_VALID_TO],
                       _(KeyInfoPrompts[KIP_VALID_TO]), shortbuf);

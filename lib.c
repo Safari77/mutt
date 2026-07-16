@@ -796,10 +796,12 @@ void mutt_debug_f(const char *file, const int line, const char *function, const 
   time_t now = time(NULL);
   static char buf[23] = "";
   static time_t last = 0;
+  struct tm local;
 
   if (now > last)
   {
-    strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", localtime(&now));
+    localtime_r(&now, &local);
+    strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &local);
     last = now;
   }
 

@@ -1378,8 +1378,12 @@ MESSAGE *mx_open_new_message(CONTEXT *dest, HEADER *hdr, int flags)
           p = hdr->env->from;
       }
 
-      fprintf(msg->fp, "From %s %s", p ? p->mailbox : NONULL(Username),
-              mutt_ctime(&msg->received));
+      char ctimebuf[32];
+      struct tm tm_local;
+      localtime_r(&msg->received, &tm_local);
+      strftime_l(ctimebuf, sizeof(ctimebuf), "%a %b %e %H:%M:%S %Y\n",
+                 &tm_local, loc_time_c);
+      fprintf(msg->fp, "From %s %s", p ? p->mailbox : NONULL(Username), ctimebuf);
     }
   }
   else

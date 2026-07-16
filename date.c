@@ -27,13 +27,14 @@
    representation */
 static time_t compute_tz(time_t g, struct tm *utc)
 {
-  struct tm *lt = localtime(&g);
+  struct tm lt;
   time_t t;
   int yday;
 
-  t = (((lt->tm_hour - utc->tm_hour) * 60) + (lt->tm_min - utc->tm_min)) * 60;
+  localtime_r(&g, &lt);
+  t = (((lt.tm_hour - utc->tm_hour) * 60) + (lt.tm_min - utc->tm_min)) * 60;
 
-  if ((yday = (lt->tm_yday - utc->tm_yday)))
+  if ((yday = (lt.tm_yday - utc->tm_yday)))
   {
     /* This code is optimized to negative timezones (West of Greenwich) */
     if (yday == -1 ||   /* UTC passed midnight before localtime */
@@ -51,15 +52,11 @@ static time_t compute_tz(time_t g, struct tm *utc)
  */
 time_t mutt_local_tz(time_t t)
 {
-  struct tm *ptm;
   struct tm utc;
 
   if (!t)
     t = time(NULL);
-  ptm = gmtime(&t);
-  /* need to make a copy because gmtime/localtime return a pointer to
-     static memory (grr!) */
-  memcpy(&utc, ptm, sizeof(utc));
+  gmtime_r(&t, &utc);
   return (compute_tz(t, &utc));
 }
 

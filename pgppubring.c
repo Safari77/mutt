@@ -895,7 +895,7 @@ static void pgpring_dump_keyblock(pgp_key_t p)
 {
   pgp_uid_t *uid;
   short first;
-  struct tm *tp;
+  struct tm tp;
   time_t t;
 
   for (; p; p = p->next)
@@ -940,10 +940,10 @@ static void pgpring_dump_keyblock(pgp_key_t p)
           putchar(gnupg_trustletter(uid->trust));
 
         t = p->gen_time;
-        tp = gmtime(&t);
+        gmtime_r(&t, &tp);
 
         printf(":%d:%d:%s:%04d-%02d-%02d::::", p->keylen, p->numalg, p->keyid,
-               1900 + tp->tm_year, tp->tm_mon + 1, tp->tm_mday);
+               1900 + tp.tm_year, tp.tm_mon + 1, tp.tm_mday);
 
         print_userid(uid->addr);
         printf("::");

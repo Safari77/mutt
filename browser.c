@@ -309,10 +309,12 @@ folder_format_str(char *dest, size_t destlen, size_t col, int cols, char op, con
           t_fmt = tnow - folder->ff->mtime < 31536000 ? "%b %d %H:%M" : "%b %d  %Y";
         }
 
+        struct tm tm_local;
+        localtime_r(&folder->ff->mtime, &tm_local);
         if (!do_locales)
-          strftime_l(date, sizeof(date), t_fmt, localtime(&folder->ff->mtime), loc_time_c);
+          strftime_l(date, sizeof(date), t_fmt, &tm_local, loc_time_c);
         else
-          strftime(date, sizeof(date), t_fmt, localtime(&folder->ff->mtime));
+          strftime(date, sizeof(date), t_fmt, &tm_local);
 
         mutt_format_s(dest, destlen, fmt, date);
       }

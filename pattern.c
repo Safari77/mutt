@@ -667,10 +667,11 @@ static const char *getDate(const char *s, struct tm *t, BUFFER *err)
 {
   char *p;
   time_t now = time(NULL);
-  struct tm *tm = localtime(&now);
-  int iso8601=1;
-  int v=0;
+  struct tm local;
+  int iso8601 = 1;
+  int v = 0;
 
+  localtime_r(&now, &local);
   for (v=0; v<8; v++)
   {
     if (s[v] && s[v] >= '0' && s[v] <= '9')
@@ -717,8 +718,8 @@ static const char *getDate(const char *s, struct tm *t, BUFFER *err)
   if (*p != '/')
   {
     /* fill in today's month and year */
-    t->tm_mon = tm->tm_mon;
-    t->tm_year = tm->tm_year;
+    t->tm_mon = local.tm_mon;
+    t->tm_year = local.tm_year;
     return p;
   }
   p++;
@@ -730,7 +731,7 @@ static const char *getDate(const char *s, struct tm *t, BUFFER *err)
   }
   if (*p != '/')
   {
-    t->tm_year = tm->tm_year;
+    t->tm_year = local.tm_year;
     return p;
   }
   p++;
@@ -903,9 +904,7 @@ static int eval_date_minmax(pattern_t *pat, const char *s, BUFFER *err)
      here */
   min.tm_mday = 2;
   min.tm_year = 70;
-
   memset(&max, 0, sizeof(max));
-
   /* Arbitrary year in the future.  Don't set this too high
      or mutt_mktime() returns something larger than will
      fit in a time_t on some systems */
@@ -923,23 +922,22 @@ static int eval_date_minmax(pattern_t *pat, const char *s, BUFFER *err)
        >3d      more than three days ago
        =3d      exactly three days ago */
     time_t now = time(NULL);
-    struct tm *tm = localtime(&now);
+    struct tm *tm;
     int exact = 0;
-
     if (s[0] == '<')
     {
-      memcpy(&min, tm, sizeof(min));
+      /* localtime_r fills the whole struct, so write straight into min */
+      localtime_r(&now, &min);
       tm = &min;
     }
     else
     {
-      memcpy(&max, tm, sizeof(max));
+      /* localtime_r fills the whole struct, so write straight into max */
+      localtime_r(&now, &max);
       tm = &max;
-
       if (s[0] == '=')
         exact++;
     }
-
     /* Reset the HMS unless we are relative matching using one of those
      * offsets. */
     strtol(s + 1, &offset_type, 0);
@@ -948,23 +946,21 @@ static int eval_date_minmax(pattern_t *pat, const char *s, BUFFER *err)
       tm->tm_hour = 23;
       tm->tm_min = tm->tm_sec = 59;
     }
-
     /* force negative offset */
     get_offset(tm, s + 1, -1);
-
     if (exact)
     {
       /* start at the beginning of the day in question */
-      memcpy(&min, &max, sizeof(max));
+      min = max;
       min.tm_hour = min.tm_sec = min.tm_min = 0;
     }
   }
   else
   {
     const char *pc = s;
-
     int haveMin = FALSE;
     int untilNow = FALSE;
+
     if (isdigit((unsigned char)*pc))
     {
       /* minimum date specified */
@@ -981,27 +977,23 @@ static int eval_date_minmax(pattern_t *pat, const char *s, BUFFER *err)
         untilNow = (*pt == '\0');
       }
     }
-
     if (!untilNow)
     { /* max date or relative range/window */
-
       struct tm baseMin;
 
       if (!haveMin)
       { /* save base minimum and set current date, e.g. for "-3d+1d" */
         time_t now = time(NULL);
-        struct tm *tm = localtime(&now);
-        memcpy(&baseMin, &min, sizeof(baseMin));
-        memcpy(&min, tm, sizeof(min));
+        /* save the base before localtime_r overwrites min */
+        baseMin = min;
+        localtime_r(&now, &min);
         min.tm_hour = min.tm_sec = min.tm_min = 0;
       }
-
       /* preset max date for relative offsets,
          if nothing follows we search for messages on a specific day */
       max.tm_year = min.tm_year;
       max.tm_mon = min.tm_mon;
       max.tm_mday = min.tm_mday;
-
       if (!parse_date_range(pc, &min, &max, haveMin, &baseMin, err))
       { /* bail out on any parsing error */
         return (-1);
@@ -1011,10 +1003,8 @@ static int eval_date_minmax(pattern_t *pat, const char *s, BUFFER *err)
 
   /* Since we allow two dates to be specified we'll have to adjust that. */
   adjust_date_range(&min, &max);
-
   pat->min = mutt_mktime(&min, 1);
   pat->max = mutt_mktime(&max, 1);
-
   return 0;
 }
 

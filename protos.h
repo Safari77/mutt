@@ -116,7 +116,6 @@ char *mutt_read_rfc822_line(FILE *, char *, size_t *);
 ENVELOPE *mutt_read_rfc822_header(FILE *, HEADER *, short, short);
 
 int mutt_check_month(const char *);
-const char *mutt_ctime(const time_t *t);
 
 #define MUTT_IS_FROM_PREFIX   0      /* Anything with a "From " prefix passes */
 #define MUTT_IS_FROM_LAX      1      /* Reverse scan.  Accepts any return-path */

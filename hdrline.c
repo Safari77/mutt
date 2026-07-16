@@ -342,7 +342,7 @@ hdr_format_str(char *dest,
     /* preprocess $date_format to handle %Z */
     {
       const char *cp;
-      struct tm *tm;
+      struct tm tm;
       time_t T;
 
       p = dest;
@@ -410,13 +410,13 @@ hdr_format_str(char *dest,
       *p = 0;
 
       if (op == '[' || op == 'D')
-        tm = localtime(&hdr->date_sent);
+        localtime_r(&hdr->date_sent, &tm);
       else if (op == '(')
-        tm = localtime(&hdr->received);
+        localtime_r(&hdr->received, &tm);
       else if (op == '<')
       {
         T = time(NULL);
-        tm = localtime(&T);
+        localtime_r(&T, &tm);
       }
       else
       {
@@ -426,13 +426,13 @@ hdr_format_str(char *dest,
           T -= (hdr->zhours * 3600 + hdr->zminutes * 60);
         else
           T += (hdr->zhours * 3600 + hdr->zminutes * 60);
-        tm = gmtime(&T);
+        gmtime_r(&T, &tm);
       }
 
       if (!do_locales)
-        strftime_l(buf2, sizeof(buf2), dest, tm, loc_time_c);
+        strftime_l(buf2, sizeof(buf2), dest, &tm, loc_time_c);
       else
-        strftime(buf2, sizeof(buf2), dest, tm);
+        strftime(buf2, sizeof(buf2), dest, &tm);
 
       mutt_format_s(dest, destlen, prefix, buf2);
       if (len > 0 && op != 'd' && op != 'D') /* Skip ending op */

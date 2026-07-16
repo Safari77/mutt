@@ -1802,24 +1802,24 @@ BODY *mutt_remove_multipart_alternative(BODY *b)
 void mutt_make_date(BUFFER *s)
 {
   time_t t = time(NULL);
-  struct tm *l;
+  struct tm l;
   time_t tz = 0;
 
   if (option(OPTLOCALDATEHEADER))
   {
-    l = localtime(&t);
+    localtime_r(&t, &l);
     tz = mutt_local_tz(t);
   }
   else
   {
-    l = gmtime(&t);
+    gmtime_r(&t, &l);
   }
 
   tz /= 60;
 
   mutt_buffer_add_printf(s,  "%s, %d %s %d %02d:%02d:%02d %+03d%02d",
-                         Weekdays[l->tm_wday], l->tm_mday, Months[l->tm_mon],
-                         l->tm_year + 1900, l->tm_hour, l->tm_min, l->tm_sec,
+                         Weekdays[l.tm_wday], l.tm_mday, Months[l.tm_mon],
+                         l.tm_year + 1900, l.tm_hour, l.tm_min, l.tm_sec,
                          (int) tz / 60, (int) abs((int) tz) % 60);
 }
 
