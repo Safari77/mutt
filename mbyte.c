@@ -171,6 +171,12 @@ int mutt_filter_unprintable(char **s)
     scratch[k2] = '\0';
     mutt_buffer_addstr(b, scratch);
   }
+  /* If the current charset is stateful (e.g. ISO-2022-JP), the output may
+   * have been left in a non-initial shift state.  Converting L'\0' stores
+   * the closing shift sequence followed by a NUL byte. */
+  k2 = wcrtomb(scratch, L'\0', &mbstate2);
+  if (k2 != (size_t)(-1) && k2 > 1)
+    mutt_buffer_addstr(b, scratch);
   FREE(s);  /* __FREE_CHECKED__ */
   *s = b->data ? b->data : safe_calloc(1, 1);
   FREE(&b);
