@@ -1233,7 +1233,7 @@ bail:  /* Come here in case of disaster */
   if (need_sort)
     /* if the mailbox was reopened, the thread tree will be invalid so make
      * sure to start threading from scratch.  */
-    mutt_sort_headers(ctx, (need_sort == MUTT_REOPENED));
+    mutt_sort_headers(ctx, (rc == MUTT_REOPENED));
 
 fatal:
   mutt_buffer_pool_release(&tempfile);
