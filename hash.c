@@ -161,6 +161,7 @@ static int union_hash_insert(HASH * table, union hash_key key, void *data)
   {
     ptr->next = table->table[h];
     table->table[h] = ptr;
+    table->elem_count++;
   }
   else
   {
@@ -183,6 +184,7 @@ static int union_hash_insert(HASH * table, union hash_key key, void *data)
     else
       table->table[h] = ptr;
     ptr->next = tmp;
+    table->elem_count++;
   }
   return h;
 }
@@ -327,6 +329,7 @@ static void union_hash_delete(HASH *table, union hash_key key, const void *data,
       if (table->strdup_keys)
         FREE(&ptr->key.strkey);
       FREE(&ptr);
+      table->elem_count--;
 
       ptr = *last;
     }
