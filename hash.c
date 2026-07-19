@@ -100,19 +100,19 @@ static int cmp_int_key(union hash_key a, union hash_key b)
   return 1;
 }
 
-static HASH *new_hash(int nelem)
+static HASH *new_hash(int bucket_count)
 {
   HASH *table = safe_calloc(1, sizeof(HASH));
-  if (nelem == 0)
-    nelem = 2;
-  table->nelem = nelem;
-  table->table = safe_calloc(nelem, sizeof(struct hash_elem *));
+  if (bucket_count == 0)
+    bucket_count = 2;
+  table->bucket_count = bucket_count;
+  table->table = safe_calloc(bucket_count, sizeof(struct hash_elem *));
   return table;
 }
 
-HASH *hash_create(int nelem, int flags)
+HASH *hash_create(int bucket_count, int flags)
 {
-  HASH *table = new_hash(nelem);
+  HASH *table = new_hash(bucket_count);
   /* Keys are always hashed/compared bytewise; case-insensitive tables store
    * and look up keys in canonical (casefolded + NFC) form instead of using a
    * special hash/compare pair, see utf8_normal_key(). */
@@ -132,9 +132,9 @@ HASH *hash_create(int nelem, int flags)
   return table;
 }
 
-HASH *int_hash_create(int nelem, int flags)
+HASH *int_hash_create(int bucket_count, int flags)
 {
-  HASH *table = new_hash(nelem);
+  HASH *table = new_hash(bucket_count);
   table->gen_hash = gen_int_hash;
   table->cmp_key = cmp_int_key;
   if (flags & MUTT_HASH_ALLOW_DUPS)
@@ -153,7 +153,7 @@ static int union_hash_insert(HASH * table, union hash_key key, void *data)
   unsigned int h;
 
   ptr = (struct hash_elem *) safe_malloc(sizeof(struct hash_elem));
-  h = table->gen_hash(key, table->nelem);
+  h = table->gen_hash(key, table->bucket_count);
   ptr->key = key;
   ptr->data = data;
 
@@ -224,7 +224,7 @@ static struct hash_elem *union_hash_find_elem(const HASH *table, union hash_key 
   if (!table)
     return NULL;
 
-  hash = table->gen_hash(key, table->nelem);
+  hash = table->gen_hash(key, table->bucket_count);
   ptr = table->table[hash];
   for (; ptr; ptr = ptr->next)
   {
@@ -297,7 +297,7 @@ struct hash_elem *hash_find_bucket(const HASH *table, const char *strkey)
   if (table->utf8_casefold)
     strkey = tmpkey = utf8_normal_key(strkey);
   key.strkey = strkey;
-  hash = table->gen_hash(key, table->nelem);
+  hash = table->gen_hash(key, table->bucket_count);
   elem = table->table[hash];
   FREE(&tmpkey);
   return elem;
@@ -312,7 +312,7 @@ static void union_hash_delete(HASH *table, union hash_key key, const void *data,
   if (!table)
     return;
 
-  hash = table->gen_hash(key, table->nelem);
+  hash = table->gen_hash(key, table->bucket_count);
   ptr = table->table[hash];
   last = &table->table[hash];
 
@@ -375,7 +375,7 @@ void hash_destroy(HASH **ptr, void (*destroy)(void *))
     return;
 
   pptr = *ptr;
-  for (i = 0 ; i < pptr->nelem; i++)
+  for (i = 0 ; i < pptr->bucket_count; i++)
   {
     for (elem = pptr->table[i]; elem; )
     {
@@ -403,7 +403,7 @@ struct hash_elem *hash_walk(const HASH *table, struct hash_walk_state *state)
   if (state->last)
     state->index++;
 
-  while (state->index < table->nelem)
+  while (state->index < table->bucket_count)
   {
     if (table->table[state->index])
     {
