@@ -3341,7 +3341,7 @@ int mutt_write_fcc(const char *path, SEND_CONTEXT *sctx, const char *msgid, int 
    * chain, save that information
    */
 
-  if (post && hdr->chain && hdr->chain)
+  if (post && hdr->chain)
   {
     LIST *p;
 
