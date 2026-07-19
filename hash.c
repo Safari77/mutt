@@ -187,7 +187,7 @@ static int union_hash_insert(HASH * table, union hash_key key, void *data)
   return h;
 }
 
-int hash_insert(HASH * table, const char *strkey, void *data)
+int hash_insert(HASH *table, const char *strkey, void *data)
 {
   union hash_key key;
   int r;
@@ -209,7 +209,7 @@ int hash_insert(HASH * table, const char *strkey, void *data)
   return r;
 }
 
-int int_hash_insert(HASH * table, unsigned int intkey, void *data)
+int int_hash_insert(HASH *table, unsigned int intkey, void *data)
 {
   union hash_key key;
   key.intkey = intkey;
