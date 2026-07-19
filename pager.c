@@ -988,7 +988,7 @@ resolve_types(char *buf, char *raw, struct line_t *lineInfo, int n, int last,
       if (lineInfo[i].chunks)
       {
         lineInfo[i].chunks = 0;
-        safe_realloc(&(lineInfo[n].syntax),
+        safe_realloc(&(lineInfo[i].syntax),
                      sizeof(struct syntax_t));
       }
       lineInfo[i++].type = MT_COLOR_SIGNATURE;
