@@ -28,18 +28,21 @@
 
 #include "mutt.h"
 
-#define SOMEPRIME 149711
-
 static unsigned int gen_string_hash(union hash_key key, unsigned int n)
 {
-  unsigned int h = 0;
   const unsigned char *s = (const unsigned char *)key.strkey;
+  uint32_t h = 2166136261u; // FNV-1a
 
-  while (*s)
-    h += (h << 7) + *s++;
-  h = (h * SOMEPRIME) % n;
-
-  return h;
+  while (*s) {
+    h ^= *s++;
+    h *= 16777619u;
+  }
+  h ^= h >> 16;
+  h *= 0x21f0aaad;
+  h ^= h >> 15;
+  h *= 0xf35a2d97;
+  h ^= h >> 15;
+  return (uint32_t)(((uint64_t)h * n) >> 32u);
 }
 
 static int cmp_string_key(union hash_key a, union hash_key b)
