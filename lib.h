@@ -55,8 +55,12 @@
 #  define N_(a) a
 # endif
 
+#ifndef TRUE
 # define TRUE 1
+#endif
+#ifndef FALSE
 # define FALSE 0
+#endif
 
 # define HUGE_STRING        8192
 # define LONG_STRING        1024
