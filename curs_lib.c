@@ -695,12 +695,23 @@ void mutt_progress_init(progress_t *progress, const char *msg,
                         unsigned short flags, unsigned short inc,
                         long size)
 {
-  struct timeval tv = { 0, 0 };
+  struct timespec ts = { 0, 0 };
 
   if (!progress)
     return;
   if (option(OPTNOCURSES))
     return;
+
+#if defined(USE_SLANG_CURSES) || defined(HAVE_RESIZETERM)
+  /* A resize may have happened while mutt was busy in a long-running operation */
+  if (SigWinch)
+  {
+    SigWinch = 0;
+    mutt_resize_screen();
+    clearok(stdscr, TRUE);
+    mutt_current_menu_redraw();
+  }
+#endif
 
   memset(progress, 0, sizeof(progress_t));
   progress->inc = inc;
@@ -724,12 +735,12 @@ void mutt_progress_init(progress_t *progress, const char *msg,
       mutt_message(msg);
     return;
   }
-  if (gettimeofday(&tv, NULL) < 0)
-    mutt_errno_dbg(1, "gettimeofday failed");
+  if (clock_gettime(CLOCK_MONOTONIC, &ts) < 0)
+    mutt_errno_dbg(1, "clock_gettime failed");
   /* if timestamp is 0 no time-based suppression is done */
   if (TimeInc)
-    progress->timestamp_millis = ((unsigned long long) tv.tv_sec * 1000ULL)
-      + (unsigned long long) (tv.tv_usec / 1000);
+    progress->timestamp_millis = (uint64_t)ts.tv_sec * 1000ULL +
+                                (uint64_t)(ts.tv_nsec / 1000000);
   mutt_progress_update(progress, 0, 0);
 }
 
@@ -737,11 +748,24 @@ void mutt_progress_update(progress_t *progress, long pos, int percent)
 {
   char posstr[SHORT_STRING];
   short update = 0;
-  struct timeval tv = { 0, 0 };
-  unsigned long long now_millis = 0;
+  struct timespec ts = { 0, 0 };
+  uint64_t now_millis = 0;
 
   if (option(OPTNOCURSES))
     return;
+
+#if defined(USE_SLANG_CURSES) || defined(HAVE_RESIZETERM)
+  /* Handle a SIGWINCH that may have arrived since the previous update.
+   * SigWinch is cleared so we only do this once per resize
+   * even though mutt_progress_update() may be called frequently. */
+  if (SigWinch)
+  {
+    SigWinch = 0;
+    mutt_resize_screen();
+    clearok(stdscr, TRUE);
+    mutt_current_menu_redraw();
+  }
+#endif
 
   if (!progress->inc)
     goto out;
@@ -754,10 +778,10 @@ void mutt_progress_update(progress_t *progress, long pos, int percent)
     update = 1;
 
   /* skip refresh if not enough time has passed */
-  if (update && progress->timestamp_millis && !gettimeofday(&tv, NULL))
+  if (update && progress->timestamp_millis && !clock_gettime(CLOCK_MONOTONIC, &ts))
   {
-    now_millis = ((unsigned long long) tv.tv_sec * 1000ULL)
-      + (unsigned long long) (tv.tv_usec / 1000);
+    now_millis = (uint64_t)ts.tv_sec * 1000ULL +
+                 (uint64_t)(ts.tv_nsec / 1000000);
     if (now_millis &&
         (now_millis - progress->timestamp_millis < TimeInc))
       update = 0;
