@@ -142,16 +142,34 @@ HASH *int_hash_create(int bucket_count, int flags)
   return table;
 }
 
+#define MAX_BUCKET_COUNT ((int) (INT_MAX / (2 * sizeof(struct hash_elem *))))
+
 static void resize_hash(HASH *table)
 {
   struct hash_elem **old_buckets = table->table;
+  struct hash_elem **new_buckets;
   int old_bucket_count = table->bucket_count;
-  int bucket, hash;
+  int new_bucket_count = table->bucket_count;
+  int bucket;
+  unsigned int hash;
   struct hash_elem *elem, *next_elem;
 
-  while (table->elem_count > table->bucket_count * 1.2)
-    table->bucket_count *= 2;
-  table->table = safe_calloc(table->bucket_count, sizeof(struct hash_elem *));
+  if (new_bucket_count < 1)
+    new_bucket_count = 1;
+
+  /* Grow while the load factor exceeds 1.2. */
+  while (new_bucket_count <= MAX_BUCKET_COUNT / 2 &&
+         table->elem_count > new_bucket_count + new_bucket_count / 5)
+    new_bucket_count *= 2;
+
+  if (new_bucket_count == old_bucket_count)
+    return;                             /* nothing to rehash */
+
+  new_buckets = safe_calloc(new_bucket_count, sizeof(struct hash_elem *));
+
+  /* commit the new size only after the allocation succeeded */
+  table->table = new_buckets;
+  table->bucket_count = new_bucket_count;
 
   for (bucket = 0; bucket < old_bucket_count; bucket++)
   {
@@ -159,11 +177,9 @@ static void resize_hash(HASH *table)
     while (elem)
     {
       next_elem = elem->next;
-
-      hash = table->gen_hash(elem->key, table->bucket_count);
+      hash = table->gen_hash(elem->key, (unsigned int) new_bucket_count);
       elem->next = table->table[hash];
       table->table[hash] = elem;
-
       elem = next_elem;
     }
   }
