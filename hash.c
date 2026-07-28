@@ -20,6 +20,8 @@
 # include "config.h"
 #endif
 
+#include <limits.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -70,6 +72,8 @@ static int cmp_string_key(union hash_key a, union hash_key b)
  *
  * Note: distinct invalid byte sequences may both fold to the same U+FFFD
  * replacement form and thus compare equal; this is accepted behavior.
+ *
+ * Requires GLib >= 2.52 (g_utf8_make_valid).
  */
 static char *utf8_normal_key(const char *strkey)
 {
@@ -103,11 +107,18 @@ static int cmp_int_key(union hash_key a, union hash_key b)
   return 1;
 }
 
+#define MAX_BUCKET_COUNT ((int) (INT_MAX / (2 * sizeof(struct hash_elem *))))
+
+/* nelem is only an initial size hint; resize_hash() grows the table on demand. */
 static HASH *new_hash(int bucket_count)
 {
   HASH *table = safe_calloc(1, sizeof(HASH));
-  if (bucket_count == 0)
+
+  if (bucket_count < 2)
     bucket_count = 2;
+  else if (bucket_count > MAX_BUCKET_COUNT)
+    bucket_count = MAX_BUCKET_COUNT;
+
   table->bucket_count = bucket_count;
   table->table = safe_calloc(bucket_count, sizeof(struct hash_elem *));
   return table;
@@ -145,17 +156,18 @@ HASH *int_hash_create(int bucket_count, int flags)
   return table;
 }
 
-#define MAX_BUCKET_COUNT ((int) (INT_MAX / (2 * sizeof(struct hash_elem *))))
-
+/* INVARIANT: every bucket chain is sorted by key in ascending cmp_key()
+ * order.  union_hash_insert()'s duplicate check depends on this (it stops
+ * scanning at the first key larger than the one being inserted). */
 static void resize_hash(HASH *table)
 {
   struct hash_elem **old_buckets = table->table;
   struct hash_elem **new_buckets;
+  struct hash_elem *elem, *next_elem, **pos;
   int old_bucket_count = table->bucket_count;
   int new_bucket_count = table->bucket_count;
   int bucket;
   unsigned int hash;
-  struct hash_elem *elem, *next_elem;
 
   if (new_bucket_count < 1)
     new_bucket_count = 1;
@@ -181,8 +193,20 @@ static void resize_hash(HASH *table)
     {
       next_elem = elem->next;
       hash = table->gen_hash(elem->key, (unsigned int) new_bucket_count);
-      elem->next = table->table[hash];
-      table->table[hash] = elem;
+
+      /* Reinsert at the sorted position instead of at the bucket head.
+       * The old head-push scrambled the per-bucket key order; once a chain
+       * was unsorted, union_hash_insert()'s early-exit duplicate check could
+       * miss an existing key, letting duplicate keys into a table created
+       * without MUTT_HASH_ALLOW_DUPS.  No duplicate handling is needed here:
+       * the table was duplicate-free before the resize. */
+      for (pos = &table->table[hash];
+           *pos && table->cmp_key((*pos)->key, elem->key) < 0;
+           pos = &(*pos)->next)
+        ;
+      elem->next = *pos;
+      *pos = elem;
+
       elem = next_elem;
     }
   }
@@ -192,14 +216,13 @@ static void resize_hash(HASH *table)
 /* table        hash table to update
  * key          key to hash on
  * data         data to associate with `key'
- * allow_dup    if nonzero, duplicate keys are allowed in the table
  */
 static int union_hash_insert(HASH *table, union hash_key key, void *data)
 {
   struct hash_elem *ptr;
   unsigned int h;
 
-  if (table->elem_count > table->bucket_count * 1.2)
+  if (table->elem_count > table->bucket_count + table->bucket_count / 5)
     resize_hash(table);
 
   ptr = (struct hash_elem *) safe_malloc(sizeof(struct hash_elem));
