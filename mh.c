@@ -91,21 +91,38 @@ static inline struct mh_data *mh_data(CONTEXT *ctx)
   return (struct mh_data*)ctx->data;
 }
 
-static void mhs_alloc(struct mh_sequences *mhs, int i)
+/* Upper bound on MH message numbers we will track in the in-core
+ * sequences table (each entry costs sizeof(short)). */
+#define MH_SEQ_MAX      (1 << 24)
+
+/* Returns 0 on success, -1 if i is out of range. */
+static int mhs_alloc(struct mh_sequences *mhs, int i)
 {
   int j;
   int newmax;
 
-  if (i > mhs->max || !mhs->flags)
-  {
-    newmax = i + 128;
-    j = mhs->flags ? mhs->max + 1 : 0;
-    safe_realloc(&mhs->flags, sizeof(mhs->flags[0]) * (newmax + 1));
-    while (j <= newmax)
-      mhs->flags[j++] = 0;
+  if (i < 0 || i > MH_SEQ_MAX)
+    return -1;
 
-    mhs->max = newmax;
-  }
+  if (i <= mhs->max && mhs->flags)
+    return 0;
+
+  newmax = i + 128;
+  j = mhs->flags ? mhs->max + 1 : 0;
+  safe_realloc(&mhs->flags, sizeof(mhs->flags[0]) * ((size_t)newmax + 1));
+  while (j <= newmax)
+    mhs->flags[j++] = 0;
+
+  mhs->max = newmax;
+  return 0;
+}
+
+static short mhs_set(struct mh_sequences *mhs, int i, short f)
+{
+  if (mhs_alloc(mhs, i) < 0)
+    return 0;                   /* out-of-range sequence number: ignore */
+  mhs->flags[i] |= f;
+  return mhs->flags[i];
 }
 
 static void mhs_free_sequences(struct mh_sequences *mhs)
@@ -119,13 +136,6 @@ static short mhs_check(struct mh_sequences *mhs, int i)
     return 0;
   else
     return mhs->flags[i];
-}
-
-static short mhs_set(struct mh_sequences *mhs, int i, short f)
-{
-  mhs_alloc(mhs, i);
-  mhs->flags[i] |= f;
-  return mhs->flags[i];
 }
 
 #if 0
@@ -174,7 +184,12 @@ static int mh_read_sequences(struct mh_sequences *mhs, const char *path)
   mutt_buffer_printf(pathname, "%s/.mh_sequences", path);
 
   if (!(fp = fopen(mutt_b2s(pathname), "r")))
-    goto out; /* yes, ask callers to silently ignore the error */
+  {
+    if (errno == ENOENT)
+      goto out;     /* genuinely no sequences yet: empty is correct */
+    rc = -1;        /* exists but unreadable: do NOT treat as "no flags" */
+    goto out;
+  }
 
   while ((buff = mutt_read_line(buff, &sz, fp, &line, 0)))
   {
@@ -192,7 +207,8 @@ static int mh_read_sequences(struct mh_sequences *mhs, const char *path)
 
     while ((t = strtok(NULL, " \t:")))
     {
-      if (mh_read_token(t, &first, &last) < 0)
+      if (mh_read_token(t, &first, &last) < 0 ||
+          first < 0 || last < first || last > MH_SEQ_MAX)
       {
         mhs_free_sequences(mhs);
         rc = -1;
@@ -438,17 +454,17 @@ static void mhs_write_one_sequence(FILE * fp, struct mh_sequences *mhs,
 }
 
 /* XXX - we don't currently remove deleted messages from sequences we don't know.  Should we? */
-
-static void mh_update_sequences(CONTEXT * ctx)
+static void mh_update_sequences(CONTEXT *ctx)
 {
-  FILE *ofp, *nfp;
+  FILE *ofp = NULL, *nfp = NULL;
 
   BUFFER *sequences = NULL;
-  char *tmpfname;
+  char *tmpfname = NULL;
   char *buff = NULL;
   char *p;
-  size_t s;
-  int l = 0;
+  size_t s = 0;
+  int lineno = 0;
+  int n;
   int i;
 
   int unseen = 0;
@@ -459,7 +475,6 @@ static void mh_update_sequences(CONTEXT * ctx)
   char seq_replied[STRING];
   char seq_flagged[STRING];
 
-
   struct mh_sequences mhs;
   memset(&mhs, 0, sizeof(mhs));
 
@@ -467,20 +482,29 @@ static void mh_update_sequences(CONTEXT * ctx)
   snprintf(seq_replied, sizeof(seq_replied), "%s:", NONULL(MhReplied));
   snprintf(seq_flagged, sizeof(seq_flagged), "%s:", NONULL(MhFlagged));
 
-  if (mh_mkstemp(ctx, &nfp, &tmpfname) != 0)
-  {
-    /* error message? */
-    return;
-  }
-
   sequences = mutt_buffer_pool_get();
   mutt_buffer_printf(sequences, "%s/.mh_sequences", ctx->path);
 
-
-  /* first, copy unknown sequences */
-  if ((ofp = fopen(mutt_b2s(sequences), "r")))
+  /*
+   * Open the current file first: we must carry over lines for
+   * sequences we do not manage.  If the file exists but cannot be
+   * read, ABORT.  Rewriting it anyway would permanently destroy every
+   * sequence line we don't know about (and, on a parse-level read
+   * failure, part of them).
+   */
+  if ((ofp = fopen(mutt_b2s(sequences), "r")) == NULL && errno != ENOENT)
   {
-    while ((buff = mutt_read_line(buff, &s, ofp, &l, 0)))
+    mutt_perror(mutt_b2s(sequences));
+    goto out;
+  }
+
+  if (mh_mkstemp(ctx, &nfp, &tmpfname) != 0)
+    goto out;
+
+  /* copy unknown sequences */
+  if (ofp)
+  {
+    while ((buff = mutt_read_line(buff, &s, ofp, &lineno, 0)))
     {
       if (!mutt_strncmp(buff, seq_unseen, mutt_strlen(seq_unseen)))
         continue;
@@ -491,34 +515,42 @@ static void mh_update_sequences(CONTEXT * ctx)
 
       fprintf(nfp, "%s\n", buff);
     }
+    if (ferror(ofp))
+    {
+      /* partial read: renaming our incomplete copy over the original
+       * would corrupt the unknown sequences.  Keep the old file. */
+      mutt_error(_("Error reading %s; sequences not updated"),
+                 mutt_b2s(sequences));
+      goto fail;
+    }
+    safe_fclose(&ofp);
   }
-  safe_fclose(&ofp);
 
   /* now, update our unseen, flagged, and replied sequences */
-  for (l = 0; l < ctx->msgcount; l++)
+  for (n = 0; n < ctx->msgcount; n++)
   {
-    if (ctx->hdrs[l]->deleted)
+    if (ctx->hdrs[n]->deleted)
       continue;
 
-    if ((p = strrchr(ctx->hdrs[l]->path, '/')))
+    if ((p = strrchr(ctx->hdrs[n]->path, '/')))
       p++;
     else
-      p = ctx->hdrs[l]->path;
+      p = ctx->hdrs[n]->path;
 
     if (mutt_atoi(p, &i, 0) < 0)
       continue;
 
-    if (!ctx->hdrs[l]->read)
+    if (!ctx->hdrs[n]->read)
     {
       mhs_set(&mhs, i, MH_SEQ_UNSEEN);
       unseen++;
     }
-    if (ctx->hdrs[l]->flagged)
+    if (ctx->hdrs[n]->flagged)
     {
       mhs_set(&mhs, i, MH_SEQ_FLAGGED);
       flagged++;
     }
-    if (ctx->hdrs[l]->replied)
+    if (ctx->hdrs[n]->replied)
     {
       mhs_set(&mhs, i, MH_SEQ_REPLIED);
       replied++;
@@ -533,21 +565,49 @@ static void mh_update_sequences(CONTEXT * ctx)
   if (replied)
     mhs_write_one_sequence(nfp, &mhs, MH_SEQ_REPLIED, NONULL(MhReplied));
 
-  mhs_free_sequences(&mhs);
-
-
-  /* try to commit the changes - no guarantee here */
-  safe_fclose(&nfp);
-
-  unlink(mutt_b2s(sequences));
-  if (safe_rename(tmpfname, mutt_b2s(sequences)) != 0)
+  /*
+   * fclose() is where deferred write errors (ENOSPC, quota, NFS)
+   * show up.  If the temp file did not make it to disk intact, keep
+   * the original .mh_sequences rather than replacing it with a
+   * truncated one.
+   */
+  if (safe_fclose(&nfp) != 0)
   {
-    /* report an error? */
-    unlink(tmpfname);
+    mutt_perror(tmpfname);
+    goto fail;
   }
-  mutt_buffer_pool_release(&sequences);
 
+  /*
+   * Replace the old file atomically with rename(2).  tmpfname was
+   * created in the same directory as .mh_sequences (mh_mkstemp), so
+   * EXDEV is impossible and rename() is atomic on every POSIX
+   * filesystem -- including the ones where link(2) doesn't work.
+   *
+   * Do NOT use safe_rename() here: its link(2)-first design fails
+   * with EEXIST whenever the target exists (EEXIST is not in its
+   * fallback list), which is why the old code had to unlink(2) the
+   * old file first, leaving a window in which .mh_sequences did not
+   * exist at all.  (mutt_perror on failure; keep the old file.)
+   */
+  if (rename(tmpfname, mutt_b2s(sequences)) != 0)
+  {
+    mutt_perror(mutt_b2s(sequences));
+    goto fail;              /* fail: unlinks tmpfname */
+  }
+  FREE(&tmpfname);          /* renamed away; no longer ours */
+  goto out;
+
+fail:
+  safe_fclose(&nfp);    /* no-op if already closed */
+  if (tmpfname)
+    unlink(tmpfname);
+
+out:
+  safe_fclose(&ofp);    /* no-op if not open */
+  mhs_free_sequences(&mhs);
+  mutt_buffer_pool_release(&sequences);
   FREE(&tmpfname);
+  FREE(&buff);
 }
 
 static void mh_sequences_add_one(CONTEXT * ctx, int n, short unseen,
@@ -616,8 +676,7 @@ static void mh_sequences_add_one(CONTEXT * ctx, int n, short unseen,
 
   safe_fclose(&nfp);
 
-  unlink(mutt_b2s(sequences));
-  if (safe_rename(tmpfname, mutt_b2s(sequences)) != 0)
+  if (rename(tmpfname, mutt_b2s(sequences)) != 0)
     unlink(tmpfname);
   mutt_buffer_pool_release(&sequences);
 
@@ -683,6 +742,7 @@ static void maildir_parse_flags(HEADER * h, const char *path)
   h->flagged = 0;
   h->read = 0;
   h->replied = 0;
+  h->trash = h->deleted = 0;
 
   if ((p = strrchr(path, ':')) != NULL && mutt_strncmp(p + 1, "2,", 2) == 0)
   {
@@ -1299,7 +1359,7 @@ static int mh_open_mailbox_append(CONTEXT *ctx, int flags)
 
     tmp = mutt_buffer_pool_get();
     mutt_buffer_printf(tmp, "%s/.mh_sequences", ctx->path);
-    if ((i = creat(mutt_b2s(tmp), S_IRWXU)) == -1)
+    if ((i = creat(mutt_b2s(tmp), S_IRUSR|S_IWUSR)) == -1)
     {
       mutt_perror(mutt_b2s(tmp));
       rmdir(ctx->path);
@@ -1648,7 +1708,7 @@ static int _mh_commit_message(CONTEXT * ctx, MESSAGE * msg, HEADER * hdr,
   FOREVER
   {
     hi++;
-    snprintf(tmp, sizeof(tmp), "%d", hi);
+    snprintf(tmp, sizeof(tmp), "%u", hi);
     mutt_buffer_printf(path, "%s/%s", ctx->path, tmp);
     if (safe_rename(msg->path, mutt_b2s(path)) == 0)
     {
@@ -2137,27 +2197,25 @@ static int maildir_check_mailbox(CONTEXT * ctx, int *index_hint)
   if (mutt_stat_timespec_compare(&st_cur, MUTT_STAT_MTIME, &data->mtime_cur) > 0)
     changed |= 2;
 
+  #ifdef USE_INOTIFY
+  if (MonitorContextChanged)
+  {
+    /* A monitor event means "something happened", even if mtime
+     * granularity can't tell.  Rescan both subdirs, but still advance
+     * our watermarks so the NEXT quiet check is cheap. */
+    MonitorContextChanged = 0;
+    changed |= 3;
+  }
+#endif
+
   if (!changed)
   {
     mutt_buffer_pool_release(&buf);
     return 0;                   /* nothing to do */
   }
 
-  /* Update the modification times on the mailbox.
-   *
-   * The monitor code notices changes in the open mailbox too quickly.
-   * In practice, this sometimes leads to all the new messages not being
-   * noticed during the SAME group of mtime stat updates.  To work around
-   * the problem, don't update the stat times for a monitor caused check. */
-#ifdef USE_INOTIFY
-  if (MonitorContextChanged)
-    MonitorContextChanged = 0;
-  else
-#endif
-  {
-    mutt_get_stat_timespec(&data->mtime_cur, &st_cur, MUTT_STAT_MTIME);
-    mutt_get_stat_timespec(&ctx->mtime, &st_new, MUTT_STAT_MTIME);
-  }
+  mutt_get_stat_timespec(&data->mtime_cur, &st_cur, MUTT_STAT_MTIME);
+  mutt_get_stat_timespec(&ctx->mtime, &st_new, MUTT_STAT_MTIME);
 
   /* do a fast scan of just the filenames in
    * the subdirectories that have changed.
@@ -2291,12 +2349,12 @@ fail:
  *
  */
 
-static int mh_check_mailbox(CONTEXT * ctx, int *index_hint)
+static int mh_check_mailbox(CONTEXT *ctx, int *index_hint)
 {
   BUFFER *buf = NULL;
   struct stat st, st_cur;
   int have_st_cur = 0;
-  short modified = 0, have_new = 0, occult = 0, flags_changed = 0;;
+  short modified = 0, have_new = 0, occult = 0, flags_changed = 0;
   struct maildir *md, *p;
   struct maildir **last = NULL;
   struct mh_sequences mhs;
@@ -2335,10 +2393,14 @@ static int mh_check_mailbox(CONTEXT * ctx, int *index_hint)
         FREE(&tmp);
       }
     }
+    /* Re-stat: our creation attempt may have succeeded, or a racing
+     * process may have created the file in the meantime. */
     if (stat(mutt_b2s(buf), &st_cur) == 0)
       have_st_cur = 1;
     else
-      modified = 1;   /* dir changed w.r.t. sequences we can't see */
+      /* We cannot see .mh_sequences at all.  Force a full scan below,
+       * but never touch st_cur: it is uninitialized. */
+      modified = 1;
   }
 
   mutt_buffer_pool_release(&buf);
@@ -2348,10 +2410,31 @@ static int mh_check_mailbox(CONTEXT * ctx, int *index_hint)
        mutt_stat_timespec_compare(&st_cur, MUTT_STAT_MTIME, &data->mtime_cur) > 0))
     modified = 1;
 
+#ifdef USE_INOTIFY
+  /*
+   * A monitor event means "something happened to this mailbox", even
+   * when the directory mtimes appear unchanged: with coarse (1s)
+   * timestamp granularity, a change within the same second as the
+   * previous check leaves mtime untouched.  Force a rescan.
+   *
+   * Do NOT do what the old code did -- skip updating the stored mtimes
+   * on monitor-triggered checks.  That left the watermarks permanently
+   * stale on busy folders, turning every subsequent monitor event into
+   * a full readdir/hash/parse cycle.  Instead we snapshot the mtimes
+   * here, BEFORE scanning: any change racing the scan bumps an mtime
+   * after the snapshot and is therefore caught by the next check.
+   */
+  if (MonitorContextChanged)
+  {
+    MonitorContextChanged = 0;
+    modified = 1;
+  }
+#endif
+
   if (!modified)
     return 0;
 
-  /* snapshot-before-scan, always store, but only from valid stats */
+  /* Snapshot the mailbox mtimes before scanning (see above). */
   mutt_get_stat_timespec(&ctx->mtime, &st, MUTT_STAT_MTIME);
   if (have_st_cur)
     mutt_get_stat_timespec(&data->mtime_cur, &st_cur, MUTT_STAT_MTIME);
@@ -2361,16 +2444,17 @@ static int mh_check_mailbox(CONTEXT * ctx, int *index_hint)
   md   = NULL;
   last = &md;
 
+  /* A failed scan must not be mistaken for "all messages vanished"
+   * (which would flag every header as occult below). */
   if (maildir_parse_dir(ctx, &last, NULL, &count, NULL) == -1)
-    return -1;
+    return -1;          /* md is still NULL; buf already released */
   maildir_delayed_parsing(ctx, &md, NULL);
 
   if (mh_read_sequences(&mhs, ctx->path) < 0)
   {
-    maildir_free_maildir(&md);
+    maildir_free_maildir(&md);  /* don't leak the scan results */
     return -1;
   }
-
   mh_update_maildir(md, &mhs);
   mhs_free_sequences(&mhs);
 
@@ -2379,6 +2463,12 @@ static int mh_check_mailbox(CONTEXT * ctx, int *index_hint)
 
   for (p = md; p; p = p->next)
   {
+    /* Delayed parsing drops headers it cannot parse/free them as NULL;
+     * skip those entries or hash_insert would dereference p->h->path
+     * (they are freed along with the list further down). */
+    if (!p->h)
+      continue;
+
     /* the hash key must survive past the header, which is freed below. */
     p->canon_fname = safe_strdup(p->h->path);
     hash_insert(fnames, p->canon_fname, p);
@@ -2404,7 +2494,6 @@ static int mh_check_mailbox(CONTEXT * ctx, int *index_hint)
   }
 
   /* destroy the file name hash */
-
   hash_destroy(&fnames, NULL);
 
   /* If we didn't just get new mail, update the tables. */
@@ -2422,7 +2511,6 @@ static int mh_check_mailbox(CONTEXT * ctx, int *index_hint)
     return MUTT_FLAGS;
   return 0;
 }
-
 
 static int maildir_save_to_header_cache(CONTEXT *ctx, HEADER *h)
 {
