@@ -36,6 +36,7 @@
 #include <sys/file.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <errno.h>
 
 /* struct used by mutt_sync_mailbox() to store new offsets */
 struct m_update_t
@@ -181,9 +182,9 @@ int mmdf_parse_mailbox(CONTEXT *ctx)
 
       if (hdr->content->length > 0 && hdr->lines > 0)
       {
-        tmploc = hdr->content->length < ctx->size ? loc + hdr->content->length : -1;
+        tmploc = hdr->content->length <= ctx->size ? loc + hdr->content->length : -1;
 
-        if (0 < tmploc && tmploc < ctx->size)
+        if (0 < tmploc && tmploc <= ctx->size)
         {
           if (fseeko(ctx->fp, tmploc, SEEK_SET) != 0 ||
               fgets(buf, sizeof(buf) - 1, ctx->fp) == NULL ||
@@ -299,7 +300,7 @@ int mbox_parse_mailbox(CONTEXT *ctx)
   }
 
   loc = ftello(ctx->fp);
-  while (fgets(buf, sizeof(buf), ctx->fp) != NULL)
+  while (fgets(buf, sizeof(buf) - 1, ctx->fp) != NULL)
   {
     /* At BOF or after a content-length separator, accept everything
        with a "From " prefix */
@@ -368,17 +369,20 @@ int mbox_parse_mailbox(CONTEXT *ctx)
 
         /* The test below avoids a potential integer overflow if the
          * content-length is huge (thus necessarily invalid).
+         * NOTE: Use <= ctx->size because a message can end exactly at EOF.
          */
-        tmploc = curhdr->content->length < ctx->size ? loc + curhdr->content->length + 1 : -1;
+        tmploc = curhdr->content->length <= ctx->size ? loc + curhdr->content->length : -1;
 
-        if (0 < tmploc && tmploc < ctx->size)
+        if (0 < tmploc && tmploc <= ctx->size)
         {
           /*
            * check to see if the content-length looks valid.  we expect to
-           * to see a valid message separator at this point in the stream
+           * to see a valid message separator at this point in the stream.
+           * We seek to tmploc - 1 to land on the newline preceding the "From " line,
+           * so that the next fgets() in the main loop reads the entire "From " line.
            */
           if (fseeko(ctx->fp, tmploc, SEEK_SET) != 0 ||
-              fgets(buf, sizeof(buf), ctx->fp) == NULL ||
+              fgets(buf, sizeof(buf) - 1, ctx->fp) == NULL ||
               mutt_strncmp("From ", buf, 5) != 0)
           {
             muttdbg(1, "mbox_parse_mailbox: bad content-length in message %d (cl=" OFF_T_FMT ")", curhdr->index, curhdr->content->length);
@@ -389,6 +393,13 @@ int mbox_parse_mailbox(CONTEXT *ctx)
             }
             curhdr->content->length = -1;
           }
+          else
+          {
+            /* Content-Length is valid. Position stream so next iteration reads "From " */
+            if (tmploc > 0 && fseeko(ctx->fp, tmploc - 1, SEEK_SET) != 0)
+              muttdbg(1, "mbox_parse_mailbox: fseek() to separator failed");
+            expect_from_line = 1;
+          }
         }
         else if (tmploc != ctx->size)
         {
@@ -397,31 +408,34 @@ int mbox_parse_mailbox(CONTEXT *ctx)
            */
           curhdr->content->length = -1;
         }
-
-        if (curhdr->content->length != -1)
+        else
         {
-          /* good content-length.  check to see if we know how many lines
-           * are in this message.
-           */
-          if (curhdr->lines == 0)
-          {
-            LOFF_T cl = curhdr->content->length;
+            /* Message ends exactly at EOF; no separator to seek back to */
+            expect_from_line = 1;
+        }
 
-            /* count the number of lines in this message */
-            if (fseeko(ctx->fp, loc, SEEK_SET) != 0)
-              muttdbg(1, "mbox_parse_mailbox: fseek() failed");
-            while (cl-- > 0)
-            {
-              if (fgetc(ctx->fp) == '\n')
-                curhdr->lines++;
-            }
+        if (curhdr->content->length != -1 && curhdr->lines == 0)
+        {
+          LOFF_T cl = curhdr->content->length;
+
+          /* count the number of lines in this message */
+          if (fseeko(ctx->fp, loc, SEEK_SET) != 0)
+            muttdbg(1, "mbox_parse_mailbox: fseek() failed");
+          while (cl-- > 0)
+          {
+            if (fgetc(ctx->fp) == '\n')
+              curhdr->lines++;
           }
 
-          /* return to the offset of the next *mbox* separator */
-          if (fseeko(ctx->fp, tmploc - 1, SEEK_SET) != 0)
-            muttdbg(1, "mbox_parse_mailbox: fseek() failed");
-
-          expect_from_line = 1;
+          /* After counting lines, re-position for the main loop if we haven't already
+           * or if line counting moved the pointer. If tmploc was valid, we already
+           * did the seek above, but line counting may have moved us. Re-seek to be safe.
+           */
+          if (tmploc > 0 && tmploc <= ctx->size)
+          {
+             if (fseeko(ctx->fp, tmploc - 1, SEEK_SET) != 0)
+                muttdbg(1, "mbox_parse_mailbox: fseek() after line count failed");
+          }
         }
       }
 
@@ -496,6 +510,7 @@ static int mbox_open_mailbox(CONTEXT *ctx)
   mutt_block_signals();
   if (mbox_lock_mailbox(ctx, 0, 1) == -1)
   {
+    safe_fclose(&ctx->fp);
     mutt_unblock_signals();
     return (-1);
   }
@@ -936,14 +951,18 @@ static int mbox_sync_mailbox(CONTEXT *ctx, int *index_hint)
   /* Create a temporary file to write the new version of the mailbox in. */
   tempfile = mutt_buffer_pool_get();
   mutt_buffer_mktemp(tempfile);
-  if ((i = open(mutt_b2s(tempfile), O_WRONLY | O_EXCL | O_CREAT, 0600)) == -1 ||
-      (fp = fdopen(i, "w")) == NULL)
+  if ((i = open(mutt_b2s(tempfile), O_WRONLY | O_EXCL | O_CREAT, 0600)) == -1)
   {
-    if (-1 != i)
-    {
-      close(i);
-      unlink_tempfile = 1;
-    }
+    mutt_error _("Could not create temporary file!");
+    mutt_sleep(5);
+    goto bail;
+  }
+
+  fp = fdopen(i, "w");
+  if (fp == NULL)
+  {
+    close(i);
+    unlink_tempfile = 1;
     mutt_error _("Could not create temporary file!");
     mutt_sleep(5);
     goto bail;
@@ -1093,9 +1112,12 @@ static int mbox_sync_mailbox(CONTEXT *ctx, int *index_hint)
     goto fatal;
   }
 
-  if (fseeko(ctx->fp, offset, SEEK_SET) != 0 ||  /* seek the append location */
-      /* do a sanity check to make sure the mailbox looks ok */
-      fgets(buf, sizeof(buf), ctx->fp) == NULL ||
+  if (fseeko(ctx->fp, offset, SEEK_SET) != 0)
+  {
+    muttdbg(1, "fseek() to offset failed");
+    i = -1;
+  }
+  else if (fgets(buf, sizeof(buf), ctx->fp) == NULL ||
       (ctx->magic == MUTT_MBOX && mutt_strncmp("From ", buf, 5) != 0) ||
       (ctx->magic == MUTT_MMDF && mutt_strcmp(MMDF_SEP, buf) != 0))
   {
@@ -1250,11 +1272,12 @@ int mutt_reopen_mailbox(CONTEXT *ctx, int *index_hint)
   int i, j;
   int rc = -1;
 
-  /* silent operations */
-  ctx->quiet = 1;
-
+  /* Display message before setting quiet flag */
   if (!ctx->quiet)
     mutt_message _("Reopening mailbox...");
+
+  /* silent operations */
+  ctx->quiet = 1;
 
   /* our heuristics require the old mailbox to be unsorted */
   if (Sort != SORT_ORDER)
