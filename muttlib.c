@@ -2756,7 +2756,8 @@ static int mutt_put_file_in_place(const char *path, const char *safe_file, const
   int rv;
 
   rv = safe_rename(safe_file, path);
-  unlink(safe_file);
+  if (rv != 0)
+    unlink(safe_file);
   rmdir(safe_dir);
   return rv;
 }
