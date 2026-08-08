@@ -55,6 +55,18 @@
 #  define N_(a) a
 # endif
 
+#if defined(__linux__)
+# include <sys/syscall.h>
+# include <fcntl.h>
+# ifdef SYS_renameat2
+#  define HAVE_RENAMEAT2
+#  include <linux/fs.h>
+#  ifndef RENAME_NOREPLACE
+#    define RENAME_NOREPLACE (1 << 0)
+#  endif
+# endif
+#endif
+
 #ifndef TRUE
 # define TRUE 1
 #endif

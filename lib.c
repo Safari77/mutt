@@ -444,14 +444,11 @@ compare_stat(struct stat *osb, struct stat *nsb)
   return 0;
 }
 
-
-
 /*
  * This function is supposed to do nfs-safe renaming of files.
  *
  * Warning: We don't check whether src and target are equal.
  */
-
 int safe_rename(const char *src, const char *target)
 {
   struct stat ssb, tsb;
@@ -460,6 +457,55 @@ int safe_rename(const char *src, const char *target)
   if (!src || !target)
     return -1;
 
+#ifdef HAVE_RENAMEAT2
+  /*
+   * Try renameat2 with RENAME_NOREPLACE first. This is an atomic
+   * no-clobber rename on modern Linux kernels (>= 3.15). We use the
+   * raw syscall to avoid glibc availability/version issues.
+   *
+   * AT_FDCWD is used because safe_rename takes absolute or cwd-relative
+   * paths, matching the original link()/rename() behavior.
+   */
+  {
+    long ret = syscall(SYS_renameat2,
+                       AT_FDCWD, src,
+                       AT_FDCWD, target,
+                       RENAME_NOREPLACE);
+    if (ret == 0)
+    {
+      muttdbg(1, "renameat2(RENAME_NOREPLACE) (%s, %s) succeeded.",
+              src, target);
+      return 0;
+    }
+
+    /*
+     * If the kernel or filesystem does not support renameat2, fall
+     * through to the legacy link-based path below. EEXIST means the
+     * target already exists, which is a definitive no-clobber result
+     * (identical to the old behavior) -- no need to retry.
+     */
+    if (errno != ENOSYS &&
+        errno != EOPNOTSUPP &&
+        errno != EPERM &&
+        errno != EXDEV &&
+        errno != EINVAL)
+    {
+      mutt_errno_dbg(1, "renameat2(RENAME_NOREPLACE) (%s, %s) failed",
+                     src, target);
+      return -1;
+    }
+
+    muttdbg(1, "renameat2 not supported, falling back to link-based rename.");
+  }
+#endif /* HAVE_RENAMEAT2 */
+
+  /*
+   * Legacy NFS-safe rename via link()+unlink().
+   *
+   * link() is atomic and will fail with EEXIST if target already
+   * exists, providing the no-clobber guarantee when renameat2 is
+   * unavailable.
+   */
   if (link(src, target) != 0)
   {
     link_errno = errno;
@@ -496,9 +542,7 @@ int safe_rename(const char *src, const char *target)
      * With other file systems, rename should just fail when
      * the files reside on different file systems, so it's safe
      * to try it here.
-     *
      */
-
     muttdbg(1, "link (%s, %s) failed: %s (%d)",
             src, target, strerror(errno), errno);
 
@@ -513,7 +557,7 @@ int safe_rename(const char *src, const char *target)
 #ifdef EOPNOTSUPP
         || errno == EOPNOTSUPP
 #endif
-      )
+       )
     {
       muttdbg(1, "trying rename...");
       if (rename(src, target) == -1)
@@ -529,43 +573,6 @@ int safe_rename(const char *src, const char *target)
     return -1;
   }
 
-  /*
-   * Remove the compare_stat() check, because it causes problems with maildir on
-   * filesystems that don't properly support hard links, such as
-   * sshfs.  The filesystem creates the link, but the resulting file
-   * is given a different inode number by the sshfs layer.  This
-   * results in an infinite loop creating links.
-   */
-#if 0
-  /*
-   * Stat both links and check if they are equal.
-   */
-  if (lstat(src, &ssb) == -1)
-  {
-    muttdbg(1, "can't stat %s: %s (%d)",
-            src, strerror(errno), errno);
-    return -1;
-  }
-
-  if (lstat(target, &tsb) == -1)
-  {
-    muttdbg(1, "can't stat %s: %s (%d)",
-            src, strerror(errno), errno);
-    return -1;
-  }
-
-  /*
-   * pretend that the link failed because the target file
-   * did already exist.
-   */
-  if (compare_stat(&ssb, &tsb) == -1)
-  {
-    muttdbg(1, "stat blocks for %s and %s diverge; pretending EEXIST.", src, target);
-    errno = EEXIST;
-    return -1;
-  }
-#endif
-
 success:
   /*
    * Unlink the original link.  Should we really ignore the return
@@ -577,10 +584,8 @@ success:
             src, strerror(errno), errno);
   }
 
-
   return 0;
 }
-
 
 static const char safe_chars[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+@{}._-:%";
 
