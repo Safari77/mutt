@@ -41,10 +41,11 @@
 typedef struct monitor_t
 {
   struct monitor_t *next;
-  char *mh_backup_path;
+  char *path;
   dev_t st_dev;
   ino_t st_ino;
   short magic;
+  short isdir;
   int descr;
 } MONITOR;
 
@@ -67,12 +68,12 @@ typedef struct monitorinfo_t
   BUFFER *_pathbuf; /* access via path only (maybe not initialized) */
 } MONITORINFO;
 
-#define INOTIFY_MASK_DIR  (IN_MOVED_TO | IN_ATTRIB | IN_CLOSE_WRITE | IN_ISDIR)
+#define INOTIFY_MASK_DIR  (IN_MOVED_TO | IN_MOVED_FROM | IN_CREATE | IN_ATTRIB | IN_CLOSE_WRITE)
 #define INOTIFY_MASK_FILE IN_CLOSE_WRITE
 
 static void mutt_poll_fd_add(int fd, short events)
 {
-  int i = 0;
+  size_t i = 0;
   for (i = 0; i < PollFdsCount && PollFds[i].fd != fd; ++i);
 
   if (i == PollFdsCount)
@@ -145,12 +146,12 @@ static MONITOR *monitor_create(MONITORINFO *info, int descriptor)
 {
   MONITOR *monitor = (MONITOR *) safe_calloc(1, sizeof(MONITOR));
   monitor->magic  = info->magic;
+  monitor->isdir  = info->isdir;
   monitor->st_dev = info->st_dev;
   monitor->st_ino = info->st_ino;
   monitor->descr  = descriptor;
+  monitor->path   = safe_strdup(info->path);
   monitor->next   = Monitor;
-  if (info->magic == MUTT_MH)
-    monitor->mh_backup_path = safe_strdup(info->path);
 
   Monitor = monitor;
 
@@ -183,7 +184,7 @@ static void monitor_delete(MONITOR *monitor)
     ptr = &(*ptr)->next;
   }
 
-  FREE(&monitor->mh_backup_path); /* __FREE_CHECKED__ */
+  FREE(&monitor->path); /* __FREE_CHECKED__ */
   monitor = monitor->next;
   FREE(ptr); /* __FREE_CHECKED__ */
   *ptr = monitor;
@@ -200,16 +201,24 @@ static int monitor_handle_ignore(int descr)
 
   if (iter)
   {
-    if (iter->magic == MUTT_MH && stat(iter->mh_backup_path, &sb) == 0)
+    if (stat(iter->path, &sb) == 0)
     {
-      if ((new_descr = inotify_add_watch(INotifyFd, iter->mh_backup_path, INOTIFY_MASK_FILE)) == -1)
-        mutt_errno_dbg(2, "monitor: inotify_add_watch failed for '%s'", iter->mh_backup_path);
+      uint32_t mask = iter->isdir ? INOTIFY_MASK_DIR : INOTIFY_MASK_FILE;
+      if ((new_descr = inotify_add_watch(INotifyFd, iter->path, mask)) == -1)
+        mutt_errno_dbg(2, "monitor: inotify_add_watch failed for '%s'", iter->path);
       else
       {
         muttdbg(3, "monitor: inotify_add_watch descriptor=%d for '%s'", new_descr, iter->mh_backup_path);
         iter->st_dev = sb.st_dev;
         iter->st_ino = sb.st_ino;
         iter->descr = new_descr;
+
+        /* Re-arming implies the file was REPLACED (rename over the
+         * old inode).  The new inode's IN_CLOSE_WRITE was never
+         * watched, and with 1-second mtime granularity the
+         * replacement can compare equal to the stored watermarks --
+         * so explicitly report the change. */
+        MonitorFilesChanged = 1;
       }
     }
     else
@@ -218,7 +227,11 @@ static int monitor_handle_ignore(int descr)
     }
 
     if (MonitorContextDescriptor == descr)
+    {
       MonitorContextDescriptor = new_descr;
+      if (new_descr != -1)
+        MonitorContextChanged = 1;   /* replacement == change */
+    }
 
     if (new_descr == -1)
     {
@@ -300,10 +313,18 @@ int mutt_monitor_poll(void)
                 event = (const struct inotify_event *) ptr;
                 muttdbg(5, "monitor:  + detail: descriptor=%d mask=0x%x",
                         event->wd, event->mask);
-                if (event->mask & IN_IGNORED)
+                if (event->mask & IN_Q_OVERFLOW)
+                {
+                  /* Lost events; cannot attribute them to a watch.
+                   * MonitorFilesChanged is already set (buffy will
+                   * re-stat everything); force the open mailbox too. */
+                  MonitorContextChanged = 1;
+                }
+                else if (event->mask & IN_IGNORED)
                   monitor_handle_ignore(event->wd);
                 else if (event->wd == MonitorContextDescriptor)
                   MonitorContextChanged = 1;
+
                 ptr += sizeof(struct inotify_event) + event->len;
               }
             }
