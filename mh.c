@@ -65,9 +65,6 @@ struct maildir
 {
   HEADER *h;
   char *canon_fname;
-#ifdef HAVE_DIRENT_D_INO
-  ino_t inode;
-#endif /* HAVE_DIRENT_D_INO */
   struct maildir *next;
 };
 
@@ -882,9 +879,6 @@ static int maildir_parse_dir(CONTEXT * ctx, struct maildir ***last,
 
     entry = safe_calloc(sizeof(struct maildir), 1);
     entry->h = h;
-#ifdef HAVE_DIRENT_D_INO
-    entry->inode = de->d_ino;
-#endif /* HAVE_DIRENT_D_INO */
     **last = entry;
     *last = &entry->next;
   }
@@ -949,17 +943,6 @@ static size_t maildir_hcache_keylen(const char *fn)
 {
   const char * p = strrchr(fn, ':');
   return p ? (size_t) (p - fn) : mutt_strlen(fn);
-}
-#endif
-
-#if HAVE_DIRENT_D_INO
-static int md_cmp_inode(struct maildir *a, struct maildir *b)
-{
-  if (a->inode < b->inode)
-    return -1;
-  else if (a->inode > b->inode)
-    return 1;
-  return 0;
 }
 #endif
 
@@ -1029,69 +1012,28 @@ static struct maildir *maildir_merge_lists(struct maildir *left,
   return head;
 }
 
-static struct maildir *maildir_ins_sort(struct maildir *list,
-                                        int (*cmp)(struct maildir *,
-                                                   struct maildir *))
-{
-  struct maildir *tmp, *last, *ret = NULL, *back;
-
-  ret = list;
-  list = list->next;
-  ret->next = NULL;
-
-  while (list)
-  {
-    last = NULL;
-    back = list->next;
-    for (tmp = ret; tmp && cmp(tmp, list) <= 0; tmp = tmp->next)
-      last = tmp;
-
-    list->next = tmp;
-    if (last)
-      last->next = list;
-    else
-      ret = list;
-
-    list = back;
-  }
-
-  return ret;
-}
-
 /*
- * Sort maildir list according to inode.
+ * Sort maildir list.
  */
-static struct maildir *maildir_sort(struct maildir *list, size_t len,
-                                    int (*cmp)(struct maildir *,
-                                               struct maildir *))
+static struct maildir *maildir_sort(struct maildir *list,
+                                    int (*cmp)(struct maildir *, struct maildir *))
 {
-  struct maildir *left = list;
-  struct maildir *right = list;
-  size_t c = 0;
+  struct maildir *left = list, *mid = list, *run;
 
   if (!list || !list->next)
-  {
     return list;
-  }
 
-  if (len != (size_t)(-1) && len <= INS_SORT_THRESHOLD)
-    return maildir_ins_sort(list, cmp);
-
-  list = list->next;
-  while (list && list->next)
+  run = list->next;              /* tortoise/hare split */
+  while (run && run->next)
   {
-    right = right->next;
-    list = list->next->next;
-    c++;
+    mid = mid->next;
+    run = run->next->next;
   }
+  run = mid->next;
+  mid->next = NULL;
 
-  list = right;
-  right = right->next;
-  list->next = 0;
-
-  left = maildir_sort(left, c, cmp);
-  right = maildir_sort(right, c, cmp);
-  return maildir_merge_lists(left, right, cmp);
+  return maildir_merge_lists(maildir_sort(left, cmp),
+                             maildir_sort(run, cmp), cmp);
 }
 
 /* Sorts mailbox into it's natural order.
@@ -1102,7 +1044,7 @@ static void mh_sort_natural(CONTEXT *ctx, struct maildir **md)
   if (!ctx || !md || !*md || ctx->magic != MUTT_MH || Sort != SORT_ORDER)
     return;
   muttdbg(4, "maildir: sorting %s into natural order", ctx->path);
-  *md = maildir_sort(*md, (size_t) -1, md_cmp_path);
+  *md = maildir_sort(*md, md_cmp_path);
 }
 
 /*
@@ -1112,9 +1054,6 @@ static void maildir_delayed_parsing(CONTEXT *ctx, struct maildir **md,
                                     progress_t *progress)
 {
   struct maildir *p;
-#if HAVE_DIRENT_D_INO
-  struct maildir *last = NULL;
-#endif
   BUFFER *fn = NULL;
   int count;
 #if USE_HCACHE
@@ -1129,30 +1068,8 @@ static void maildir_delayed_parsing(CONTEXT *ctx, struct maildir **md,
   hc = mutt_hcache_open(HeaderCache, ctx->path, NULL);
 #endif
   fn = mutt_buffer_pool_get();
-  p = *md;
 
-  /*
-   * If available, sort by inode number to reduce seek time.
-   */
-#if HAVE_DIRENT_D_INO
-  /* Skip over any initial entries without a header to make sorting faster. */
-  for (; p && !p->h; p = p->next)
-    last = p;
-  if (!p)
-    goto cleanup;
-
-  muttdbg(4, "sorting %s by inode", ctx->path);
-  p = maildir_sort(p, (size_t) -1, md_cmp_inode);
-
-  /* Reattach the initial entries without a header, if any, to the sorted list.
-   * This is needed so that md is properly freed by the caller. */
-  if (last)
-    last->next = p;
-  else
-    *md = p;
-#endif
-
-  for (count = 0; p; p = p->next, count++)
+  for (p = *md, count = 0; p; p = p->next, count++)
   {
     if (!p->h)
       continue;
@@ -1207,9 +1124,6 @@ static void maildir_delayed_parsing(CONTEXT *ctx, struct maildir **md,
 #endif
   }
 
-#if HAVE_DIRENT_D_INO
-cleanup:
-#endif
 #if USE_HCACHE
   mutt_hcache_close(hc);
 #endif
