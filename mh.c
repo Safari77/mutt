@@ -2250,10 +2250,10 @@ static int maildir_check_mailbox(CONTEXT * ctx, int *index_hint)
    */
   md = NULL;
   last = &md;
-  if (changed & 1)
-    maildir_parse_dir(ctx, &last, "new", &count, NULL);
-  if (changed & 2)
-    maildir_parse_dir(ctx, &last, "cur", &count, NULL);
+  if ((changed & 1) && (maildir_parse_dir(ctx, &last, "new", &count, NULL) == -1))
+      goto fail;
+  if ((changed & 2) && (maildir_parse_dir(ctx, &last, "cur", &count, NULL) == -1))
+      goto fail;
 
   /* we create a hash table keyed off the canonical (sans flags) filename
    * of each message we scanned.  This is used in the loop over the
@@ -2359,6 +2359,11 @@ static int maildir_check_mailbox(CONTEXT * ctx, int *index_hint)
   if (flags_changed)
     return MUTT_FLAGS;
   return 0;
+
+fail:
+  maildir_free_maildir(&md);   /* first scan may have succeeded */
+  mutt_buffer_pool_release(&buf);
+  return -1;
 }
 
 /*
@@ -2376,6 +2381,7 @@ static int mh_check_mailbox(CONTEXT * ctx, int *index_hint)
 {
   BUFFER *buf = NULL;
   struct stat st, st_cur;
+  int have_st_cur = 0;
   short modified = 0, have_new = 0, occult = 0, flags_changed = 0;;
   struct maildir *md, *p;
   struct maildir **last = NULL;
@@ -2398,58 +2404,59 @@ static int mh_check_mailbox(CONTEXT * ctx, int *index_hint)
 
   /* create .mh_sequences when there isn't one. */
   mutt_buffer_printf(buf, "%s/.mh_sequences", ctx->path);
-  if ((i = stat(mutt_b2s(buf), &st_cur)) == -1 && errno == ENOENT)
+  if (stat(mutt_b2s(buf), &st_cur) == 0)
+    have_st_cur = 1;
+  else
   {
-    char *tmp;
-    FILE *fp = NULL;
-
-    if (mh_mkstemp(ctx, &fp, &tmp) == 0)
+    if (errno == ENOENT)
     {
-      safe_fclose(&fp);
-      if (safe_rename(tmp, mutt_b2s(buf)) == -1)
-        unlink(tmp);
-      FREE(&tmp);
-    }
-  }
+      char *tmp;
+      FILE *fp = NULL;
 
-  if (i == -1 && stat(mutt_b2s(buf), &st_cur) == -1)
-    modified = 1;
+      if (mh_mkstemp(ctx, &fp, &tmp) == 0)
+      {
+        safe_fclose(&fp);
+        if (safe_rename(tmp, mutt_b2s(buf)) == -1)
+          unlink(tmp);
+        FREE(&tmp);
+      }
+    }
+    if (stat(mutt_b2s(buf), &st_cur) == 0)
+      have_st_cur = 1;
+    else
+      modified = 1;   /* dir changed w.r.t. sequences we can't see */
+  }
 
   mutt_buffer_pool_release(&buf);
 
   if ((mutt_stat_timespec_compare(&st, MUTT_STAT_MTIME, &ctx->mtime) > 0) ||
-      (mutt_stat_timespec_compare(&st_cur, MUTT_STAT_MTIME, &data->mtime_cur) > 0))
+      (have_st_cur &&
+       mutt_stat_timespec_compare(&st_cur, MUTT_STAT_MTIME, &data->mtime_cur) > 0))
     modified = 1;
 
   if (!modified)
     return 0;
 
-  /* Update the modification times on the mailbox.
-   *
-   * The monitor code notices changes in the open mailbox too quickly.
-   * In practice, this sometimes leads to all the new messages not being
-   * noticed during the SAME group of mtime stat updates.  To work around
-   * the problem, don't update the stat times for a monitor caused check. */
-#ifdef USE_INOTIFY
-  if (MonitorContextChanged)
-    MonitorContextChanged = 0;
-  else
-#endif
-  {
+  /* snapshot-before-scan, always store, but only from valid stats */
+  mutt_get_stat_timespec(&ctx->mtime, &st, MUTT_STAT_MTIME);
+  if (have_st_cur)
     mutt_get_stat_timespec(&data->mtime_cur, &st_cur, MUTT_STAT_MTIME);
-    mutt_get_stat_timespec(&ctx->mtime, &st, MUTT_STAT_MTIME);
-  }
 
   memset(&mhs, 0, sizeof(mhs));
 
   md   = NULL;
   last = &md;
 
-  maildir_parse_dir(ctx, &last, NULL, &count, NULL);
+  if (maildir_parse_dir(ctx, &last, NULL, &count, NULL) == -1)
+    return -1;
   maildir_delayed_parsing(ctx, &md, NULL);
 
   if (mh_read_sequences(&mhs, ctx->path) < 0)
+  {
+    maildir_free_maildir(&md);
     return -1;
+  }
+
   mh_update_maildir(md, &mhs);
   mhs_free_sequences(&mhs);
 
