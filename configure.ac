@@ -1011,6 +1011,7 @@ dnl -- start cache --
 db_found=no
 db_requested=auto
 AC_ARG_ENABLE(hcache, AS_HELP_STRING([--enable-hcache],[Enable header caching]))
+AC_ARG_WITH(tkrzw, AS_HELP_STRING([--with-tkrzw@<:@=DIR@:>@],[Use tkrzw hcache backend]))
 AC_ARG_WITH(kyotocabinet, AS_HELP_STRING([--with-kyotocabinet@<:@=DIR@:>@],[Use kyotocabinet hcache backend]))
 AC_ARG_WITH(tokyocabinet, AS_HELP_STRING([--with-tokyocabinet@<:@=DIR@:>@],[Use tokyocabinet hcache backend]))
 AC_ARG_WITH(lmdb, AS_HELP_STRING([--with-lmdb@<:@=DIR@:>@],[Use lmdb hcache backend]))
@@ -1029,6 +1030,15 @@ then
 
     need_md5="yes"
 
+    if test -n "$with_tkrzw" && test "$with_tkrzw" != "no"
+    then
+      if test "$db_requested" != "auto"
+      then
+        AC_MSG_ERROR([more than one header cache engine requested.])
+      else
+        db_requested=tkrzw
+      fi
+    fi
     if test -n "$with_kyotocabinet" && test "$with_kyotocabinet" != "no"
     then
       if test "$db_requested" != "auto"
@@ -1081,6 +1091,29 @@ then
         AC_MSG_ERROR([more than one header cache engine requested.])
       else
         db_requested=bdb
+      fi
+    fi
+
+    dnl -- Tkrzw --
+    if test x$with_tkrzw != xno && test $db_found = no \
+            && test "$db_requested" = auto -o "$db_requested" = tkrzw
+    then
+      if test -n "$with_tkrzw" && test "$with_tkrzw" != "yes"
+      then
+        CPPFLAGS="$CPPFLAGS -I$with_tkrzw/include"
+        LDFLAGS="$LDFLAGS -L$with_tkrzw/lib"
+      fi
+
+      AC_CHECK_HEADER(tkrzw_langc.h,
+      AC_CHECK_LIB(tkrzw, tkrzw_dbm_open,
+        [MUTTLIBS="$MUTTLIBS -ltkrzw"
+         AC_DEFINE(HAVE_TKRZW, 1, [Tkrzw Support])
+         db_found=tkrzw],
+        [CPPFLAGS="$OLDCPPFLAGS"
+         LDFLAGS="$OLDLDFLAGS"]))
+      if test "$db_requested" != auto && test "$db_found" != "$db_requested"
+      then
+        AC_MSG_ERROR([Tkrzw could not be used. Check config.log for details.])
       fi
     fi
 
@@ -1256,7 +1289,7 @@ then
 
     if test $db_found = no
     then
-        AC_MSG_ERROR([You need Kyoto Cabinet, Tokyo Cabinet, LMDB, QDBM, GDBM, or BDB for hcache])
+        AC_MSG_ERROR([You need Tkrzw, Kyoto Cabinet, Tokyo Cabinet, LMDB, QDBM, GDBM, or BDB for hcache])
     fi
 fi
 dnl -- end cache --
