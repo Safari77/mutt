@@ -637,7 +637,7 @@ int mutt_rename_file(const char *oldfile, const char *newfile)
   }
 
   /* Close files BEFORE unlinking so we guarantee all data is safely on disk */
-  if (safe_fclose(&nfp) != 0)
+  if (safe_fsync_close(&nfp) != 0)
     rc = 2;
   safe_fclose(&ofp);
 
