@@ -98,9 +98,8 @@ int mutt_edit_headers(const char *editor,
 
   if (flags != MUTT_EDIT_HEADERS_BACKGROUND)
   {
-    char buffer[LONG_STRING];
     const char *p;
-    int i, keep;
+    int keep;
     ENVELOPE *n;
     LIST *cur, **last = NULL, *tmp;
 
@@ -132,8 +131,13 @@ int mutt_edit_headers(const char *editor,
     }
 
     n = mutt_read_rfc822_header(ifp, NULL, 1, 0);
-    while ((i = fread(buffer, 1, sizeof(buffer), ifp)) > 0)
-      fwrite(buffer, 1, i, ofp);
+    if (mutt_copy_stream(ifp, ofp) != 0)
+    {
+      safe_fclose(&ofp);
+      safe_fclose(&ifp);
+      mutt_free_envelope(&n);
+      goto cleanup;
+    }
     safe_fclose(&ofp);
     safe_fclose(&ifp);
     mutt_unlink(mutt_b2s(sctx->tempfile));
