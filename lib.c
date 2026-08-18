@@ -32,17 +32,20 @@
 # include "config.h"
 #endif
 
-#include <string.h>
 #include <ctype.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <sys/wait.h>
+#include <dirent.h>
 #include <errno.h>
-#include <sys/stat.h>
 #include <fcntl.h>
 #include <pwd.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/syscall.h>
 #include <sys/types.h>
-#include <dirent.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 #ifdef HAVE_SYSEXITS_H
 #include <sysexits.h>
@@ -395,14 +398,89 @@ void mutt_unlink(const char *s)
   }
 }
 
-int mutt_copy_bytes(FILE *in, FILE *out, size_t size)
+/*
+ * copy_file_range() is a Linux system call.  Like renameat2() its libc wrapper
+ * is only declared with _GNU_SOURCE and only exists in glibc 2.27 and later, so
+ * call it through syscall(): that works with every libc.  When the system call
+ * number is unknown the plain read()/write() loop in copy_stream_internal() is
+ * used instead.
+ */
+#if defined(__linux__)
+# ifdef SYS_copy_file_range
+#  define HAVE_COPY_FILE_RANGE
+#  define mutt_copy_file_range(fdin, offin, fdout, offout, len, flags) \
+    ((ssize_t)syscall(SYS_copy_file_range, (fdin), (offin), (fdout), \
+                          (offout), (len), (flags)))
+# endif
+#endif
+
+#define COPY_CHUNK_MAX ((size_t)1024 * 1024 * 1024) /* 1 GiB syscall chunk */
+
+static int copy_stream_internal(FILE *in, FILE *out, uint64_t size, int copy_to_eof)
 {
   char buf[65536];
   size_t chunk;
 
-  while (size > 0)
+#ifdef HAVE_COPY_FILE_RANGE
+  int src_fd = fileno(in);
+  int dest_fd = fileno(out);
+  off_t in_off = -1;
+  off_t out_off = -1;
+
+  /*
+   * Flush stdio output buffer and query logical stream positions.
+   * Passing explicit off_in and off_out pointers to copy_file_range avoids
+   * issues where stdio read-ahead buffers advance the kernel fd offset to EOF.
+   * If streams are non-seekable (ftello returns -1), fall back to fread/fwrite.
+   */
+  if (src_fd >= 0 && dest_fd >= 0 && fflush(out) == 0 &&
+      (in_off = ftello(in)) >= 0 && (out_off = ftello(out)) >= 0)
   {
-    chunk = (size > sizeof(buf)) ? sizeof(buf) : size;
+    while (copy_to_eof || size > 0)
+    {
+      size_t to_copy = COPY_CHUNK_MAX;
+      if (!copy_to_eof && size < (uint64_t)COPY_CHUNK_MAX)
+        to_copy = (size_t)size;
+
+      ssize_t n_copied = mutt_copy_file_range(src_fd, &in_off, dest_fd, &out_off, to_copy, 0);
+
+      if (n_copied == 0)
+      {
+        if (copy_to_eof)
+        {
+          (void)fseeko(in, in_off, SEEK_SET);
+          (void)fseeko(out, out_off, SEEK_SET);
+          if (fflush(out) != 0)
+            return -1;
+          return 0; /* EOF reached, everything copied */
+        }
+        break; /* EOF reached early before requested size */
+      }
+      if (n_copied < 0)
+      {
+        if (errno == EINTR)
+          continue;
+        /*
+         * Not supported across filesystems/filetypes or hit an error.
+         * Fall back to the fread/fwrite loop for the remaining stream/bytes.
+         */
+        break;
+      }
+      if (!copy_to_eof)
+        size -= (uint64_t)n_copied;
+    }
+    /* Resync stdio positions after kernel file-offset advancement */
+    (void)fseeko(in, in_off, SEEK_SET);
+    (void)fseeko(out, out_off, SEEK_SET);
+  }
+#endif
+
+  while (copy_to_eof || size > 0)
+  {
+    chunk = sizeof(buf);
+    if (!copy_to_eof && size < (uint64_t)sizeof(buf))
+      chunk = (size_t)size;
+
     if ((chunk = fread(buf, 1, chunk, in)) < 1)
       break;
     if (fwrite(buf, 1, chunk, out) != chunk)
@@ -410,26 +488,22 @@ int mutt_copy_bytes(FILE *in, FILE *out, size_t size)
       /* muttdbg(1, "fwrite() returned short byte count"); */
       return (-1);
     }
-    size -= chunk;
+    if (!copy_to_eof)
+      size -= (uint64_t)chunk;
   }
 
   if (fflush(out) != 0) return -1;
   return 0;
 }
 
+int mutt_copy_bytes(FILE *in, FILE *out, size_t size)
+{
+  return copy_stream_internal(in, out, (uint64_t)size, 0);
+}
+
 int mutt_copy_stream(FILE *fin, FILE *fout)
 {
-  size_t l;
-  char buf[LONG_STRING];
-
-  while ((l = fread(buf, 1, sizeof(buf), fin)) > 0)
-  {
-    if (fwrite(buf, 1, l, fout) != l)
-      return (-1);
-  }
-
-  if (fflush(fout) != 0) return -1;
-  return 0;
+  return copy_stream_internal(fin, fout, 0, 1);
 }
 
 int
