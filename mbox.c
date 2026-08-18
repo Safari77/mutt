@@ -530,7 +530,23 @@ static int mbox_open_mailbox(CONTEXT *ctx)
 
 static int mbox_open_mailbox_append(CONTEXT *ctx, int flags)
 {
-  ctx->fp = safe_fopen(ctx->path, flags & MUTT_NEWFOLDER ? "w" : "a");
+  if (flags & MUTT_NEWFOLDER)
+  {
+    /* safe_fopen() inherently enforces O_CREAT | O_EXCL | O_NOFOLLOW on "w" */
+    ctx->fp = safe_fopen(ctx->path, "w");
+  }
+  else
+  {
+    /*
+     * Use "r+" to avoid O_APPEND (which causes copy_file_range to fail with EBADF).
+     * "r+" falls through to fopen(). If the file does not exist yet (ENOENT),
+     * safe_fopen(ctx->path, "w") creates it exclusively.
+     */
+    ctx->fp = safe_fopen(ctx->path, "r+");
+    if (!ctx->fp && errno == ENOENT)
+      ctx->fp = safe_fopen(ctx->path, "w");
+  }
+
   if (!ctx->fp)
   {
     mutt_perror(ctx->path);
