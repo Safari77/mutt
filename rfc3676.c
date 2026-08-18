@@ -373,8 +373,13 @@ static void rfc3676_space_stuff(const char *filename, int unstuff)
   if ((in = safe_fopen(mutt_b2s(tmpfile), "r")) == NULL)
     goto bail;
 
+  /*
+   * Truncate and open with "r+" instead of "a" to avoid O_APPEND (which breaks
+   * copy_file_range with EBADF). "w" cannot be used here because safe_fopen()
+   * sets O_EXCL for "w" modes and would fail on the existing file.
+   */
   if ((truncate(filename, 0) == -1) ||
-      ((out = safe_fopen(filename, "a")) == NULL))
+      ((out = safe_fopen(filename, "r+")) == NULL))
   {
     mutt_perror(filename);
     goto bail;
