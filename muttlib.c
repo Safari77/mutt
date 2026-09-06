@@ -712,7 +712,7 @@ void _mutt_buffer_expand_path(BUFFER *src, int flags)
       }
       break;
 
-      /* elm compatibility, @ expands alias to user name */
+      /* elm compatibility, @ expands alias to username */
 
       case '@':
       {
