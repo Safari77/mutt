@@ -1084,7 +1084,6 @@ int mutt_signed_handler(BODY *a, STATE *s)
   BODY **signatures = NULL;
   int sigcnt = 0;
   int i;
-  short goodsig = 1;
   int rc = 0;
 
   if (!WithCrypto)
@@ -1143,10 +1142,14 @@ int mutt_signed_handler(BODY *a, STATE *s)
 
     if (sigcnt)
     {
+      short goodsig = 0;
+
       tempfile = mutt_buffer_pool_get();
       mutt_buffer_mktemp(tempfile);
       if (crypt_write_signed(a, s, mutt_b2s(tempfile)) == 0)
       {
+        goodsig = 1;
+
         for (i = 0; i < sigcnt; i++)
         {
           if ((WithCrypto & APPLICATION_PGP)
@@ -1173,6 +1176,7 @@ int mutt_signed_handler(BODY *a, STATE *s)
           state_printf(s, _("[-- Warning: "
                             "We can't verify %s/%s signatures. --]\n\n"),
                        TYPE(signatures[i]), signatures[i]->subtype);
+          goodsig = 0;
         }
       }
 
