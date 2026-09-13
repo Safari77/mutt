@@ -827,7 +827,7 @@ mutt_make_reference_headers(ENVELOPE *curenv, ENVELOPE *env, CONTEXT *ctx)
   /* if there's more than entry in In-Reply-To (i.e. message has
      multiple parents), don't generate a References: header as it's
      discouraged by RfC2822, sect. 3.6.4 */
-  if (ctx->tagged > 0 && env->in_reply_to && env->in_reply_to->next)
+  if (ctx->tagged > 1 && env->in_reply_to && env->in_reply_to->next)
     mutt_free_list(&env->references);
 }
 
@@ -889,7 +889,15 @@ envelope_defaults(ENVELOPE *env, CONTEXT *ctx, HEADER *cur, int flags)
     }
   }
   else if (flags & SENDFORWARD)
+  {
+    /* L10N: Used for the $forward_references prompt */
+    if (query_quadoption(OPT_FORWREFS, _("Include References header in forward?")) == MUTT_YES)
+    {
+      mutt_make_reference_headers(tag ? NULL : curenv, env, ctx);
+      mutt_free_list(&env->in_reply_to);
+    }
     mutt_make_forward_subject(env, ctx, cur);
+  }
 
   return (0);
 }
