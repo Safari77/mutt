@@ -26,12 +26,15 @@
 #endif
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <signal.h>
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <time.h>
+#include <poll.h>
 #include <sys/prctl.h>
 #include <sys/syscall.h>
 
@@ -91,6 +94,166 @@ void mutt_exec_shell(const char *cmd)
   _exit(127); /* execl error */
 }
 
+static int sys_pidfd_open(pid_t pid, unsigned int flags)
+{
+#ifdef SYS_pidfd_open
+  return syscall(SYS_pidfd_open, pid, flags);
+#else
+  errno = ENOSYS;
+  return -1;
+#endif
+}
+
+static int sys_pidfd_send_signal(int pidfd, int sig, siginfo_t *info, unsigned int flags)
+{
+#ifdef SYS_pidfd_send_signal
+  return syscall(SYS_pidfd_send_signal, pidfd, sig, info, flags);
+#else
+  errno = ENOSYS;
+  return -1;
+#endif
+}
+
+#ifdef PR_SET_CHILD_SUBREAPER
+static void cleanup_subreaper_orphans(void)
+{
+  char path[64];
+  FILE *fp;
+  pid_t self = getpid();
+  pid_t pids[64];
+  int pfds[64];
+  struct pollfd pollfds[64];
+  int count = 0;
+  int i;
+
+  /* Read adopted children from /proc/<pid>/task/<pid>/children */
+  snprintf(path, sizeof(path), "/proc/%d/task/%d/children", (int)self, (int)self);
+  fp = fopen(path, "r");
+  if (!fp)
+  {
+    /* Fallback: reap anything reparented if /proc children is inaccessible */
+    while (waitpid(-1, NULL, WNOHANG) > 0)
+      ;
+    return;
+  }
+
+  while (count < 64 && fscanf(fp, "%d", &pids[count]) == 1)
+  {
+    if (pids[count] > 1 && pids[count] != self)
+      count++;
+  }
+  fclose(fp);
+
+  if (count == 0)
+    return;
+
+  /* Obtain a pidfd for each reparented child */
+  int pidfd_supported = 1;
+  for (i = 0; i < count; i++)
+  {
+    pfds[i] = sys_pidfd_open(pids[i], 0);
+    if (pfds[i] < 0)
+    {
+      pidfd_supported = 0;
+      break;
+    }
+    pollfds[i].fd = pfds[i];
+    pollfds[i].events = POLLIN;
+    pollfds[i].revents = 0;
+  }
+
+  if (pidfd_supported)
+  {
+    int remaining = count;
+
+    /* Request graceful exit with SIGHUP (standard controlling terminal hangup) */
+    for (i = 0; i < count; i++)
+      sys_pidfd_send_signal(pfds[i], SIGHUP, NULL, 0);
+
+    /* Wait up to 100ms for reparented processes to exit */
+    int timeout_ms = 100;
+    while (remaining > 0 && timeout_ms > 0)
+    {
+      struct timespec ts_start, ts_end;
+      clock_gettime(CLOCK_MONOTONIC, &ts_start);
+
+      int ready = poll(pollfds, count, timeout_ms);
+
+      clock_gettime(CLOCK_MONOTONIC, &ts_end);
+      int spent = (int)((ts_end.tv_sec - ts_start.tv_sec) * 1000 +
+                        (ts_end.tv_nsec - ts_start.tv_nsec) / 1000000);
+      if (spent <= 0)
+        spent = 1;
+      timeout_ms -= spent;
+
+      if (ready < 0)
+      {
+        if (errno == EINTR)
+          continue; /* Interrupted by signal; loop again with remaining timeout */
+        break;
+      }
+
+      if (ready > 0)
+      {
+        remaining = 0;
+        for (i = 0; i < count; i++)
+        {
+          if (!(pollfds[i].revents & POLLIN))
+            remaining++;
+        }
+      }
+    }
+
+    /* Force termination for any tasks that did not exit */
+    if (remaining > 0)
+    {
+      for (i = 0; i < count; i++)
+      {
+        if (!(pollfds[i].revents & POLLIN))
+          sys_pidfd_send_signal(pfds[i], SIGKILL, NULL, 0);
+      }
+      /* Final 50ms wait for SIGKILL processing */
+      poll(pollfds, count, 50);
+    }
+
+    /* Deterministically reap each child and release the pidfd */
+    for (i = 0; i < count; i++)
+    {
+      siginfo_t info;
+      memset(&info, 0, sizeof(info));
+      waitid(P_PIDFD, pfds[i], &info, WEXITED | WNOHANG);
+      close(pfds[i]);
+    }
+  }
+  else
+  {
+    int j;
+    for (j = 0; j < i; j++)
+      close(pfds[j]);
+
+    /* Standard kill fallback: request termination with SIGHUP */
+    for (i = 0; i < count; i++)
+      kill(pids[i], SIGHUP);
+
+    for (i = 0; i < 10; i++)
+    {
+      pid_t w;
+      while ((w = waitpid(-1, NULL, WNOHANG)) > 0)
+        ;
+      if (w < 0 && errno == ECHILD)
+        return;
+      usleep(10000);
+    }
+
+    for (i = 0; i < count; i++)
+      kill(pids[i], SIGKILL);
+
+    while (waitpid(-1, NULL, WNOHANG) > 0)
+      ;
+  }
+}
+#endif
+
 int _mutt_system(const char *cmd, int flags)
 {
   int rc = -1;
@@ -105,7 +268,6 @@ int _mutt_system(const char *cmd, int flags)
     return (0);
 
   /* must ignore SIGINT and SIGQUIT */
-
   mutt_block_signals_system();
 
   memset(&act, 0, sizeof(act));
@@ -177,25 +339,96 @@ int _mutt_system(const char *cmd, int flags)
         default:
           _exit(0);
       }
-    }
 
-    mutt_exec_shell(cmd);
+      mutt_exec_shell(cmd);
+    }
+    else
+    {
+#ifdef PR_SET_CHILD_SUBREAPER
+      /* Subreaper supervisor adopts all grandchildren (e.g. bash background jobs) */
+      if (prctl(PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) == 0)
+      {
+        pid_t cmd_pid = fork();
+        if (cmd_pid == 0)
+        {
+#ifdef PR_SET_PDEATHSIG
+          /* Terminate shell if the supervisor dies unexpectedly */
+          prctl(PR_SET_PDEATHSIG, SIGTERM);
+#endif
+          mutt_exec_shell(cmd);
+        }
+        else if (cmd_pid > 0)
+        {
+          int status = 0;
+          int wait_ok = 0;
+          pid_t w;
+
+          /* Wait for foreground shell to finish */
+          while ((w = waitpid(cmd_pid, &status, 0)) < 0)
+          {
+            if (errno != EINTR)
+              break;
+          }
+          if (w == cmd_pid)
+            wait_ok = 1;
+
+          /* Clean up any orphaned background processes */
+          cleanup_subreaper_orphans();
+
+          if (wait_ok)
+          {
+            _exit(WIFEXITED(status) ? WEXITSTATUS(status) :
+                 (WIFSIGNALED(status) ? 128 + WTERMSIG(status) : 127));
+          }
+          else
+          {
+            _exit(127);
+          }
+        }
+        else
+        {
+          _exit(127);
+        }
+      }
+#endif
+      /* Fallback if subreaper is unsupported */
+      mutt_exec_shell(cmd);
+    }
   }
   else if (thepid != -1)
   {
+    int status = 0;
+    int wait_ok = 0;
+
 #ifndef USE_IMAP
     /* wait for the (first) child process to finish */
-    while (waitpid(thepid, &rc, 0) < 0)
+    pid_t w;
+    while ((w = waitpid(thepid, &status, 0)) < 0)
     {
       if (errno != EINTR)
-      {
-        rc = -1;
         break;
-      }
     }
+    if (w == thepid)
+      wait_ok = 1;
 #else
-    rc = imap_wait_keepalive(thepid);
+    status = imap_wait_keepalive(thepid);
+    if (status >= 0)
+      wait_ok = 1;
 #endif
+
+    if (wait_ok)
+    {
+      if (WIFEXITED(status))
+        rc = WEXITSTATUS(status);
+      else if (WIFSIGNALED(status))
+        rc = 128 + WTERMSIG(status);
+      else
+        rc = -1;
+    }
+    else
+    {
+      rc = -1;
+    }
   }
 
   /* Restore signal handlers only if they were modified */
@@ -209,20 +442,6 @@ int _mutt_system(const char *cmd, int flags)
   mutt_unblock_signals_system(1);
   if (flags & MUTT_DETACH_PROCESS)
     sigprocmask(SIG_UNBLOCK, &set, NULL);
-
-  if (thepid != -1)
-  {
-    if (WIFEXITED(rc))
-      rc = WEXITSTATUS(rc);
-    else if (WIFSIGNALED(rc))
-      rc = 128 + WTERMSIG(rc);
-    else
-      rc = -1;
-  }
-  else
-  {
-    rc = -1;
-  }
 
   return (rc);
 }
