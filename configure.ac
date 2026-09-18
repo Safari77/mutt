@@ -434,6 +434,7 @@ AC_CHECK_TYPE(ssize_t, [],
                          [Define to `int' if <sys/types.h> does not define.])])
 
 AC_CHECK_FUNCS(fgetpos memmove memccpy setegid strerror getrandom)
+AC_CHECK_FUNCS([close_range closefrom])
 
 PKG_PROG_PKG_CONFIG([0.21])
 PKG_CHECK_MODULES([GLIB], [glib-2.0 >= 2.52])

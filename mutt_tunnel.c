@@ -71,6 +71,7 @@ static int tunnel_socket_open(CONNECTION *conn)
   int rc;
   int pin[2], pout[2];
   int devnull;
+  pid_t parent_pid = getpid();
 
   tunnel = (TUNNEL_DATA*) safe_malloc(sizeof(TUNNEL_DATA));
   conn->sockdata = tunnel;
@@ -95,8 +96,7 @@ static int tunnel_socket_open(CONNECTION *conn)
   mutt_block_signals_system();
   if ((pid = fork()) == 0)
   {
-    mutt_unblock_signals_system(0);
-    mutt_reset_child_signals();
+    mutt_child_harden(parent_pid, 1);
     devnull = open("/dev/null", O_RDWR);
     if (devnull < 0 ||
         dup2(pout[0], STDIN_FILENO) < 0 ||
@@ -112,8 +112,7 @@ static int tunnel_socket_open(CONNECTION *conn)
     /* Don't let the subprocess think it can use the controlling tty */
     setsid();
 
-    execle(EXECSHELL, "sh", "-c", Tunnel, NULL, mutt_envlist());
-    _exit(127);
+    mutt_exec_shell(Tunnel);
   }
   mutt_unblock_signals_system(1);
 

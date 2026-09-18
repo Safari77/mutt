@@ -40,6 +40,7 @@ mutt_create_filter_fd(const char *cmd, FILE **in, FILE **out, FILE **err,
 {
   int pin[2], pout[2], perr[2], thepid;
   char columns[11];
+  pid_t parent_pid = getpid();
 
   if (in)
   {
@@ -85,8 +86,7 @@ mutt_create_filter_fd(const char *cmd, FILE **in, FILE **out, FILE **err,
 
   if ((thepid = fork()) == 0)
   {
-    mutt_unblock_signals_system(0);
-    mutt_reset_child_signals();
+    mutt_child_harden(parent_pid, 1);
 
     if (in)
     {
@@ -130,8 +130,7 @@ mutt_create_filter_fd(const char *cmd, FILE **in, FILE **out, FILE **err,
       mutt_envlist_set("COLUMNS", columns, 1);
     }
 
-    execle(EXECSHELL, "sh", "-c", cmd, NULL, mutt_envlist());
-    _exit(127);
+    mutt_exec_shell(cmd);
   }
   else if (thepid == -1)
   {

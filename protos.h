@@ -47,6 +47,9 @@ void mutt_free_opts(void);
 
 #define mutt_system(x) _mutt_system(x,0)
 int _mutt_system(const char *, int);
+void mutt_close_range(int min_fd);
+void mutt_child_harden(pid_t parent_pid, int set_pdeathsig);
+void mutt_exec_shell(const char *cmd);
 
 #define mutt_next_thread(x) _mutt_aside_thread(x,1,0)
 #define mutt_previous_thread(x) _mutt_aside_thread(x,0,0)

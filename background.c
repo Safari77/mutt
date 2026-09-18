@@ -32,6 +32,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <errno.h>
+#include <fcntl.h>
 
 typedef struct background_process
 {
@@ -124,7 +125,6 @@ int mutt_background_process_waitpid(void)
 static pid_t mutt_background_run(const char *cmd)
 {
   pid_t thepid;
-  int fd;
 
   if (!cmd || !*cmd)
     return (0);
@@ -134,28 +134,28 @@ static pid_t mutt_background_run(const char *cmd)
 
   if ((thepid = fork()) == 0)
   {
+    int devnull;
+
+    mutt_child_harden(0, 0);
+
     /* give up controlling terminal */
     setsid();
 
     /* this ensures the child can't use stdin to take control of the
      * terminal */
-#if defined(OPEN_MAX)
-    for (fd = 0; fd < OPEN_MAX; fd++)
-      close(fd);
-#elif defined(_POSIX_OPEN_MAX)
-    for (fd = 0; fd < _POSIX_OPEN_MAX; fd++)
-      close(fd);
-#else
-    close(0);
-    close(1);
-    close(2);
-#endif
+    devnull = open("/dev/null", O_RDWR);
+    if (devnull != -1)
+    {
+      dup2(devnull, STDIN_FILENO);
+      dup2(devnull, STDOUT_FILENO);
+      dup2(devnull, STDERR_FILENO);
+      if (devnull > 2)
+        close(devnull);
+    }
 
-    mutt_unblock_signals_system(0);
-    mutt_reset_child_signals();
+    mutt_close_range(3);
 
-    execle(EXECSHELL, "sh", "-c", cmd, NULL, mutt_envlist());
-    _exit(127); /* execl error */
+    mutt_exec_shell(cmd);
   }
 
   /* reset SIGINT, SIGQUIT and SIGCHLD */
@@ -165,10 +165,10 @@ static pid_t mutt_background_run(const char *cmd)
 }
 
 static const struct mapping_t LandingHelp[] = {
-  { N_("Exit"),  OP_EXIT },
+  { N_("Exit"),   OP_EXIT },
   { N_("Redraw"), OP_REDRAW },
-  { N_("Help"),  OP_HELP },
-  { NULL,        0 }
+  { N_("Help"),   OP_HELP },
+  { NULL,         0 }
 };
 
 
