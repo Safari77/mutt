@@ -511,6 +511,8 @@ classify_quote(struct q_class_t **QuoteList, const char *qptr,
             q_list->next->prev = q_list->prev;
           if (q_list->prev)
             q_list->prev->next = q_list->next;
+          else
+            *QuoteList = q_list->next;
 
           /* at this point, we have a tmp->down; link q_list to it */
           ptr = tmp->down;
@@ -613,11 +615,13 @@ classify_quote(struct q_class_t **QuoteList, const char *qptr,
                 /* save the next sibling for later */
                 save = q_list->next;
 
-                /* unlink q_list from the top level list */
+                /* unlink q_list from the sibling list */
                 if (q_list->next)
                   q_list->next->prev = q_list->prev;
                 if (q_list->prev)
                   q_list->prev->next = q_list->next;
+                else
+                  q_list->up->down = q_list->next;
 
                 /* at this point, we have a tmp->down; link q_list to it */
                 ptr = tmp->down;
