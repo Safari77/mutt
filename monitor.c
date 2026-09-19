@@ -47,6 +47,7 @@ typedef struct monitor_t
   short magic;
   short isdir;
   int descr;
+  unsigned int refcount; /* active references sharing this inotify watch */
 } MONITOR;
 
 static int INotifyFd = -1;
@@ -152,14 +153,15 @@ static void monitor_check_free(void)
 
 static MONITOR *monitor_create(MONITORINFO *info, int descriptor)
 {
-  MONITOR *monitor = (MONITOR *) safe_calloc(1, sizeof(MONITOR));
-  monitor->magic  = info->magic;
-  monitor->isdir  = info->isdir;
-  monitor->st_dev = info->st_dev;
-  monitor->st_ino = info->st_ino;
-  monitor->descr  = descriptor;
-  monitor->path   = safe_strdup(info->path);
-  monitor->next   = Monitor;
+  MONITOR *monitor  = (MONITOR *) safe_calloc(1, sizeof(MONITOR));
+  monitor->magic    = info->magic;
+  monitor->isdir    = info->isdir;
+  monitor->st_dev   = info->st_dev;
+  monitor->st_ino   = info->st_ino;
+  monitor->descr    = descriptor;
+  monitor->path     = safe_strdup(info->path);
+  monitor->refcount = 1;
+  monitor->next     = Monitor;
 
   Monitor = monitor;
 
@@ -450,9 +452,17 @@ int mutt_monitor_add(BUFFY *buffy)
   descr = monitor_resolve(&info, buffy);
   if (descr != RESOLVERES_OK_NOTEXISTING)
   {
-    if (!buffy && (descr == RESOLVERES_OK_EXISTING))
-      MonitorContextDescriptor = info.monitor->descr;
-    rc = descr == RESOLVERES_OK_EXISTING ? 0 : -1;
+    if (descr == RESOLVERES_OK_EXISTING)
+    {
+      if (!buffy)
+        MonitorContextDescriptor = info.monitor->descr;
+      info.monitor->refcount++;
+      rc = 0;
+    }
+    else
+    {
+      rc = -1;
+    }
     goto cleanup;
   }
 
@@ -485,11 +495,10 @@ cleanup:
  */
 int mutt_monitor_remove(BUFFY *buffy)
 {
-  MONITORINFO info, info2;
+  MONITORINFO info;
   int rc = 0;
 
   monitor_info_init(&info);
-  monitor_info_init(&info2);
 
   if (!buffy)
   {
@@ -503,36 +512,21 @@ int mutt_monitor_remove(BUFFY *buffy)
     goto cleanup;
   }
 
-  if (Context)
+  if (info.monitor->refcount > 1)
   {
-    if (buffy)
-    {
-      if (monitor_resolve(&info2, NULL) == RESOLVERES_OK_EXISTING
-          && info.st_ino == info2.st_ino && info.st_dev == info2.st_dev)
-      {
-        rc = 1;
-        goto cleanup;
-      }
-    }
-    else
-    {
-      if (mutt_find_mailbox(Context->realpath))
-      {
-        rc = 1;
-        goto cleanup;
-      }
-    }
+    --info.monitor->refcount;
+    rc = 1; /* monitor remains active because other buffies/context share it */
+    goto cleanup;
   }
 
-  if (inotify_rm_watch(INotifyFd, info.monitor->descr) == -1) {
-    mutt_errno_dbg(2, "monitor: inotify_rm_watch failed for '%s' descriptor=%d",
-                   info.path, info.monitor->descr);
-  }
+  /* Last reference dropped: unregister kernel watch and free structures */
+  inotify_rm_watch(INotifyFd, info.monitor->descr);
+  muttdbg(3, "monitor: inotify_rm_watch for '%s' descriptor=%d", info.path, info.monitor->descr);
+
   monitor_delete(info.monitor);
   monitor_check_free();
 
 cleanup:
   monitor_info_free(&info);
-  monitor_info_free(&info2);
   return rc;
 }
