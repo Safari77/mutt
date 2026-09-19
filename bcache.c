@@ -265,8 +265,8 @@ int mutt_bcache_list(body_cache_t *bcache,
 
   while ((de = readdir(d)))
   {
-    if (mutt_strncmp(de->d_name, ".", 1) == 0 ||
-        mutt_strncmp(de->d_name, "..", 2) == 0)
+    if (mutt_strcmp(de->d_name, ".") == 0 ||
+        mutt_strcmp(de->d_name, "..") == 0)
       continue;
 
     muttdbg(3, "bcache: list: dir: '%s', id :'%s'", bcache->path, de->d_name);
