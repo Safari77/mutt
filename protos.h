@@ -270,7 +270,7 @@ void mutt_unprepare_envelope(ENVELOPE *);
 void mutt_buffer_pretty_mailbox(BUFFER *);
 void mutt_buffer_pretty_multi_mailbox(BUFFER *s, const char *delimiter);
 void mutt_pretty_mailbox(char *, size_t);
-void mutt_pretty_size(char *, size_t, LOFF_T);
+void mutt_pretty_size(char *, size_t, uint64_t);
 void mutt_pipe_message(HEADER *);
 void mutt_print_message(HEADER *);
 void mutt_print_patchlist(void);

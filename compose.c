@@ -895,10 +895,10 @@ static void update_idx(MUTTMENU *menu, ATTACH_CONTEXT *actx, ATTACHPTR *new)
  *
  */
 
-static unsigned long cum_attachs_size(MUTTMENU *menu)
+static uint64_t cum_attachs_size(MUTTMENU *menu)
 {
-  size_t s;
-  unsigned short i;
+  uint64_t s;
+  size_t i;
   ATTACH_CONTEXT *actx = menu->data;
   ATTACHPTR **idx = actx->idx;
   CONTENT *info;
@@ -916,13 +916,13 @@ static unsigned long cum_attachs_size(MUTTMENU *menu)
       switch (b->encoding)
       {
         case ENCQUOTEDPRINTABLE:
-          s += 3 * (info->lobin + info->hibin) + info->ascii + info->crlf;
+          s += (uint64_t) 3 * (info->lobin + info->hibin) + info->ascii + info->crlf;
           break;
         case ENCBASE64:
-          s += (4 * (info->lobin + info->hibin + info->ascii + info->crlf)) / 3;
+          s += ((uint64_t) 4 * (info->lobin + info->hibin + info->ascii + info->crlf)) / 3;
           break;
         default:
-          s += info->lobin + info->hibin + info->ascii + info->crlf;
+          s += (uint64_t) info->lobin + info->hibin + info->ascii + info->crlf;
           break;
       }
     }

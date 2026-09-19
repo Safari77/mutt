@@ -48,6 +48,8 @@
 #include <utime.h>
 #include <dirent.h>
 #include <features.h>
+#include <inttypes.h>
+#include <stdint.h>
 
 #ifdef HAVE_GETRANDOM
 #  include <sys/random.h>
@@ -1264,10 +1266,10 @@ void mutt_pretty_mailbox(char *s, size_t buflen)
   }
 }
 
-void mutt_pretty_size(char *s, size_t len, LOFF_T n)
+void mutt_pretty_size(char *s, size_t len, uint64_t n)
 {
   if (option(OPTSIZESHOWBYTES) && (n < 1024))
-    snprintf(s, len, "%d", (int)n);
+    snprintf(s, len, "%u", (unsigned int)n);
   else if (n == 0)
     strfcpy(s,
             option(OPTSIZEUNITSONLEFT) ? "K0" : "0K",
@@ -1282,7 +1284,7 @@ void mutt_pretty_size(char *s, size_t len, LOFF_T n)
   {
     /* 51 is magic which causes 10189/10240 to be rounded up to 10 */
     snprintf(s, len,
-             option(OPTSIZEUNITSONLEFT) ? ("K" OFF_T_FMT) : (OFF_T_FMT "K"),
+             option(OPTSIZEUNITSONLEFT) ? "K%" PRIu64 : "%" PRIu64 "K",
              (n + 51) / 1024);
   }
   else if (option(OPTSIZESHOWFRACTIONS) && (n < 10433332)) /* 1.0M - 9.9M */
@@ -1291,12 +1293,25 @@ void mutt_pretty_size(char *s, size_t len, LOFF_T n)
              option(OPTSIZEUNITSONLEFT) ? "M%3.1f" : "%3.1fM",
              n / 1048576.0);
   }
-  else /* 10M+ */
+  else if (n < 1048523572) /* 10M - 999M */
   {
     /* (10433332 + 52428) / 1048576 = 10 */
     snprintf(s, len,
-             option(OPTSIZEUNITSONLEFT) ?  ("M" OFF_T_FMT) : (OFF_T_FMT "M"),
+             option(OPTSIZEUNITSONLEFT) ? "M%" PRIu64 : "%" PRIu64 "M",
              (n + 52428) / 1048576);
+  }
+  else if (option(OPTSIZESHOWFRACTIONS) && (n < 10683731149ULL)) /* 1.0G - 9.9G */
+  {
+    snprintf(s, len,
+             option(OPTSIZEUNITSONLEFT) ? "G%3.1f" : "%3.1fG",
+             n / 1073741824.0);
+  }
+  else /* 10G+ */
+  {
+    /* (10683731149 + 53687091) / 1073741824 = 10 */
+    snprintf(s, len,
+             option(OPTSIZEUNITSONLEFT) ? "G%" PRIu64 : "%" PRIu64 "G",
+             (n + 53687091ULL) / 1073741824ULL);
   }
 }
 
