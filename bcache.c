@@ -66,7 +66,7 @@ static int bcache_path(ACCOUNT *account, const char *mailbox, body_cache_t *bcac
   mutt_encode_path(path, NONULL(mailbox));
 
   mutt_buffer_printf(dst, "%s/%s%s", MessageCachedir, host, mutt_b2s(path));
-  if (*(dst->dptr - 1) != '/')
+  if (mutt_buffer_len(dst) > 0 && *(dst->dptr - 1) != '/')
     mutt_buffer_addch(dst, '/');
 
   muttdbg(3, "path: '%s'", mutt_b2s(dst));
