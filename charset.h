@@ -16,12 +16,14 @@
  *     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
-#ifndef _CHARSET_H
-#define _CHARSET_H
+#pragma once
 
 #ifdef HAVE_ICONV_H
 #include <iconv.h>
 #endif
+
+#include <stddef.h>
+#include <stdio.h>
 
 #ifndef HAVE_ICONV_T_DEF
 typedef void *iconv_t;
@@ -61,5 +63,3 @@ char *mutt_get_default_charset(void);
  * against iconv only. Returns 0 if known and negative otherwise.
  */
 int mutt_check_charset(const char *s, int strict);
-
-#endif /* _CHARSET_H */

@@ -16,11 +16,11 @@
  *     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
-#ifndef _MUTT_IDNA_H
-# define _MUTT_IDNA_H
+#pragma once
 
 #include "rfc822.h"
 #include "charset.h"
+#include "mutt.h"
 
 #ifdef HAVE_IDNA_H
 #include <idna.h>
@@ -89,6 +89,3 @@ static inline const char *mutt_addr_for_display(ADDRESS *a)
   return a->mailbox;
 }
 #endif /* HAVE_LIBICONV */
-
-
-#endif
