@@ -237,10 +237,12 @@ void mutt_buffer_substrcpy(BUFFER *buf, const char *beg, const char *end)
 static void increase_buffer_pool(void)
 {
   BUFFER *newbuf;
+  size_t target;
 
   BufferPoolLen += 5;
   safe_realloc(&BufferPool, BufferPoolLen * sizeof(BUFFER *));
-  while (BufferPoolCount < 5)
+  target = BufferPoolCount + 5;
+  while (BufferPoolCount < target)
   {
     newbuf = mutt_buffer_new();
     mutt_buffer_increase_size(newbuf, LONG_STRING);
