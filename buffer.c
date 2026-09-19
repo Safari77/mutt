@@ -115,9 +115,12 @@ void mutt_buffer_increase_size(BUFFER *buf, size_t new_size)
 /* Ensure buffer->dptr points to the end of the buffer. */
 void mutt_buffer_fix_dptr(BUFFER *buf)
 {
+  if (!buf)
+    return;
+
   buf->dptr = buf->data;
 
-  if (buf->data)
+  if (buf->data && buf->dsize > 0)
   {
     buf->data[buf->dsize - 1] = '\0';
     buf->dptr = strchr(buf->data, '\0');
