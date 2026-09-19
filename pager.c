@@ -2411,7 +2411,7 @@ search_next:
           else
           {
             /* searching backward */
-            for (i = wrapped ? rd.lastLine : rd.topline + searchctx - 1; i >= 0; i--)
+            for (i = wrapped ? rd.lastLine - 1 : MIN(rd.topline + searchctx - 1, rd.lastLine - 1); i >= 0; i--)
             {
               if ((!rd.hideQuoted || (rd.has_types &&
                                       rd.lineInfo[i].type != MT_COLOR_QUOTED)) &&
