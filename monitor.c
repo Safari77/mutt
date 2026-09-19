@@ -382,20 +382,34 @@ static int monitor_resolve(MONITORINFO *info, BUFFY *buffy)
     return RESOLVERES_FAIL_NOMAILBOX;
   }
 
-  if (!info->magic)
+  /* Mailboxes without a filesystem path (e.g. unexpanded paths or remote
+   * URLs lacking a local cache) cannot be stat'd or monitored. */
+  if (!info->path || !*info->path)
   {
-    return RESOLVERES_FAIL_NOMAGIC;
+    errno = ENOENT;
+    return RESOLVERES_FAIL_STAT;
   }
-  else if (info->magic == MUTT_MAILDIR)
+
+  /* Only local mailbox formats can be monitored by inotify. Non-local
+   * formats (MUTT_IMAP, MUTT_POP, MUTT_NNTP) must be rejected to prevent
+   * treating remote URLs as local file paths. */
+  if (info->magic == MUTT_MAILDIR)
   {
     info->isdir = 1;
     fmt = "%s/new";
   }
-  else
+  else if (info->magic == MUTT_MH)
   {
     info->isdir = 0;
-    if (info->magic == MUTT_MH)
-      fmt = "%s/.mh_sequences";
+    fmt = "%s/.mh_sequences";
+  }
+  else if (info->magic == MUTT_MBOX || info->magic == MUTT_MMDF)
+  {
+    info->isdir = 0;
+  }
+  else
+  {
+    return RESOLVERES_FAIL_NOMAGIC;
   }
 
   if (fmt)
