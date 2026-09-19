@@ -992,8 +992,6 @@ compose_format_str(char *buf, size_t buflen, size_t col, int cols, char op, cons
 
   if (optional)
     compose_status_line(buf, buflen, col, cols, menu, ifstring);
-  else if (flags & MUTT_FORMAT_OPTIONAL)
-    compose_status_line(buf, buflen, col, cols, menu, elsestring);
 
   return (src);
 }
