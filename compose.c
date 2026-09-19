@@ -1778,18 +1778,21 @@ int mutt_compose_menu(SEND_CONTEXT *sctx)
       }
 
       case OP_ATTACH_VIEW_MAILCAP:
+        CHECK_COUNT;
         mutt_view_attachment(NULL, CURATTACH->content, MUTT_MAILCAP,
                              NULL, actx);
         menu->redraw = REDRAW_FULL;
         break;
 
       case OP_ATTACH_VIEW_TEXT:
+        CHECK_COUNT;
         mutt_view_attachment(NULL, CURATTACH->content, MUTT_AS_TEXT,
                              NULL, actx);
         menu->redraw = REDRAW_FULL;
         break;
 
       case OP_ATTACH_VIEW_PAGER:
+        CHECK_COUNT;
         mutt_view_attachment(NULL, CURATTACH->content, MUTT_VIEW_PAGER,
                              NULL, actx);
         menu->redraw = REDRAW_FULL;
