@@ -230,8 +230,7 @@ static int monitor_handle_ignore(int descr)
     if (MonitorContextDescriptor == descr)
     {
       MonitorContextDescriptor = new_descr;
-      if (new_descr != -1)
-        MonitorContextChanged = 1;   /* replacement == change */
+      MonitorContextChanged = 1;   /* replacement or deletion == change */
     }
 
     if (new_descr == -1)
