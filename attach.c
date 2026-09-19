@@ -1115,7 +1115,12 @@ void mutt_actx_add_attach(ATTACH_CONTEXT *actx, ATTACHPTR *attach)
 
   if (actx->idxlen == actx->idxmax)
   {
+    if (actx->idxmax > SIZE_MAX - 5)
+      abort();
     actx->idxmax += 5;
+    if (actx->idxmax > SIZE_MAX / sizeof(ATTACHPTR *) ||
+        actx->idxmax > SIZE_MAX / sizeof(size_t))
+      abort();
     safe_realloc(&actx->idx, sizeof(ATTACHPTR *) * actx->idxmax);
     safe_realloc(&actx->v2r, sizeof(size_t) * actx->idxmax);
     for (i = actx->idxlen; i < actx->idxmax; i++)
@@ -1131,7 +1136,11 @@ void mutt_actx_add_fp(ATTACH_CONTEXT *actx, FILE *new_fp)
 
   if (actx->fp_len == actx->fp_max)
   {
+    if (actx->fp_max > SIZE_MAX - 5)
+      abort();
     actx->fp_max += 5;
+    if (actx->fp_max > SIZE_MAX / sizeof(FILE *))
+      abort();
     safe_realloc(&actx->fp_idx, sizeof(FILE *) * actx->fp_max);
     for (i = actx->fp_len; i < actx->fp_max; i++)
       actx->fp_idx[i] = NULL;
@@ -1146,7 +1155,11 @@ void mutt_actx_add_body(ATTACH_CONTEXT *actx, BODY *new_body)
 
   if (actx->body_len == actx->body_max)
   {
+    if (actx->body_max > SIZE_MAX - 5)
+      abort();
     actx->body_max += 5;
+    if (actx->body_max > SIZE_MAX / sizeof(BODY *))
+      abort();
     safe_realloc(&actx->body_idx, sizeof(BODY *) * actx->body_max);
     for (i = actx->body_len; i < actx->body_max; i++)
       actx->body_idx[i] = NULL;
