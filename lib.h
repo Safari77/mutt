@@ -92,7 +92,7 @@
 
 
 # define FREE(x) safe_free(x)
-# define NONULL(x) x?x:""
+# define NONULL(x) ((x) ? (x) : "")
 
 #ifdef HAVE_MEMCCPY
 # define strfcpy(A,B,C) memccpy(A,B,0,(C)-1), *((A)+(C)-1)=0
