@@ -157,7 +157,7 @@ static int check_sig(const char *s, struct line_t *info, int n)
 {
   int count = 0;
 
-  while (n > 0 && count <= NumSigLines)
+  while (n >= 0 && count <= NumSigLines)
   {
     if (info[n].type != MT_COLOR_SIGNATURE)
       break;
