@@ -86,6 +86,7 @@ static void mutt_poll_fd_add(int fd, short events)
     ++PollFdsCount;
     PollFds[i].fd = fd;
     PollFds[i].events = events;
+    PollFds[i].revents = 0;
   }
   else
     PollFds[i].events |= events;
