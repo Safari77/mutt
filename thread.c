@@ -1582,7 +1582,7 @@ HASH *mutt_make_subj_hash(CONTEXT *ctx)
 static void clean_references(THREAD *brk, THREAD *cur)
 {
   THREAD *p;
-  LIST *ref = NULL;
+  LIST *ref = NULL, *prev = NULL;
   int done = 0;
 
   for (; cur; cur = cur->next, done = 0)
@@ -1597,19 +1597,37 @@ static void clean_references(THREAD *brk, THREAD *cur)
      * Optimal since Mutt stores the references in reverse order, and the
      * first loop should match immediately for mails respecting RFC2822. */
     for (p = brk; !done && p; p = p->parent)
-      for (ref = cur->message->env->references; p->message && ref; ref = ref->next)
+    {
+      if (!p->message || !p->message->env || !p->message->env->message_id)
+        continue;
+      for (prev = NULL, ref = cur->message->env->references; ref; prev = ref, ref = ref->next)
+      {
         if (!mutt_strcasecmp(ref->data, p->message->env->message_id))
         {
           done = 1;
           break;
         }
+      }
+    }
 
     if (done)
     {
       HEADER *h = cur->message;
 
       /* clearing the References: header from obsolete Message-ID(s) */
-      mutt_free_list(&ref->next);
+      if (p == brk)
+      {
+        /* brk is the root of the new thread; preserve it and truncate older ancestors */
+        mutt_free_list(&ref->next);
+      }
+      else
+      {
+        /* p is an ancestor above brk; truncate ref itself and all following entries */
+        if (prev)
+          mutt_free_list(&prev->next);
+        else
+          mutt_free_list(&cur->message->env->references);
+      }
 
       h->changed = 1;
       h->env->changed |= MUTT_ENV_CHANGED_REFS;
