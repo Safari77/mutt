@@ -1376,7 +1376,7 @@ static int format_line(struct line_t **lineInfo, int n, unsigned char *buf,
     {
       if (k == (size_t)(-1))
         memset(&mbstate, 0, sizeof(mbstate));
-      mutt_errno_dbg(1, "mbrtowc returned %d", k);
+      mutt_errno_dbg(1, "mbrtowc returned %zu", k);
       if (col + 4 > wrap_cols)
         break;
       col += 4;
