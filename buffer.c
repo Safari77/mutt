@@ -136,29 +136,45 @@ void mutt_buffer_fix_dptr(BUFFER *buf)
 static int _mutt_buffer_add_printf(BUFFER *buf, const char *fmt, va_list ap)
 {
   va_list ap_retry;
-  int len, blen, doff;
+  int len;
+  size_t blen, doff;
+
+  if (!buf || !fmt)
+    return -1;
 
   va_copy(ap_retry, ap);
 
   if (!buf->dptr)
     buf->dptr = buf->data;
 
-  doff = buf->dptr - buf->data;
-  blen = buf->dsize - doff;
+  /* Avoid subtracting NULL pointers (UB) and use size_t for offsets */
+  doff = buf->data ? (size_t)(buf->dptr - buf->data) : 0;
+  blen = (buf->data && buf->dsize > doff) ? (buf->dsize - doff) : 0;
+
   /* solaris 9 vsnprintf barfs when blen is 0 */
   if (!blen)
   {
     blen = 128;
     mutt_buffer_increase_size(buf, buf->dsize + blen);
+    blen = buf->dsize - doff;
   }
-  if ((len = vsnprintf(buf->dptr, blen, fmt, ap)) >= blen)
+
+  len = vsnprintf(buf->dptr, blen, fmt, ap);
+  if (len < 0)
   {
-    blen = ++len - blen;
-    if (blen < 128)
-      blen = 128;
-    mutt_buffer_increase_size(buf, buf->dsize + blen);
-    len = vsnprintf(buf->dptr, len, fmt, ap_retry);
+    va_end(ap_retry);
+    return len;
   }
+
+  if ((size_t)len >= blen)
+  {
+    size_t add = ((size_t)len + 1) - blen;
+    if (add < 128)
+      add = 128;
+    mutt_buffer_increase_size(buf, buf->dsize + add);
+    len = vsnprintf(buf->dptr, buf->dsize - doff, fmt, ap_retry);
+  }
+
   if (len > 0)
     buf->dptr += len;
 
@@ -197,10 +213,38 @@ int mutt_buffer_add_printf(BUFFER *buf, const char *fmt, ...)
  * the buffer is always null-terminated */
 void mutt_buffer_addstr_n(BUFFER *buf, const char *s, size_t len)
 {
-  if (!buf->data ||
-      (buf->dptr + len + 1 > buf->data + buf->dsize))
+  size_t offset = 0;
+  size_t dptr_offset;
+  int is_overlap;
+
+  if (!buf)
+    return;
+
+  if (!s || len == 0)
+  {
+    if (!buf->data)
+      mutt_buffer_increase_size(buf, 128);
+    return;
+  }
+
+  if (!buf->dptr)
+    buf->dptr = buf->data;
+
+  dptr_offset = buf->data ? (size_t)(buf->dptr - buf->data) : 0;
+  is_overlap = (buf->data && s >= buf->data && s < buf->data + buf->dsize);
+  if (is_overlap)
+    offset = (size_t)(s - buf->data);
+
+  if (!buf->data || (dptr_offset + len + 1 > buf->dsize))
+  {
     mutt_buffer_increase_size(buf, buf->dsize + (len < 128 ? 128 : len + 1));
-  memcpy(buf->dptr, s, len);
+    /* If realloc moved buf->data, update s so it doesn't point to freed memory */
+    if (is_overlap)
+      s = buf->data + offset;
+  }
+
+  /* Use memmove instead of memcpy to safely handle overlapping buffers */
+  memmove(buf->dptr, s, len);
   buf->dptr += len;
   *(buf->dptr) = '\0';
 }
@@ -215,23 +259,42 @@ void mutt_buffer_addch(BUFFER *buf, char c)
   mutt_buffer_addstr_n(buf, &c, 1);
 }
 
-void mutt_buffer_strcpy(BUFFER *buf, const char *s)
-{
-  mutt_buffer_clear(buf);
-  mutt_buffer_addstr(buf, s);
-}
-
 void mutt_buffer_strcpy_n(BUFFER *buf, const char *s, size_t len)
 {
-  mutt_buffer_clear(buf);
+  if (!buf)
+    return;
+
+  /* Rewind write pointer without truncating buf->data[0] before s is read */
+  buf->dptr = buf->data;
+
+  if (!s || len == 0)
+  {
+    if (buf->dptr)
+      *(buf->dptr) = '\0';
+    return;
+  }
+
   mutt_buffer_addstr_n(buf, s, len);
+}
+
+void mutt_buffer_strcpy(BUFFER *buf, const char *s)
+{
+  if (!buf)
+    return;
+
+  /* Compute length before touching buf so s is not modified if it points inside buf */
+  mutt_buffer_strcpy_n(buf, s, mutt_strlen(s));
 }
 
 void mutt_buffer_substrcpy(BUFFER *buf, const char *beg, const char *end)
 {
-  mutt_buffer_clear(buf);
-  if (end > beg)
-    mutt_buffer_strcpy_n(buf, beg, end - beg);
+  if (!buf)
+    return;
+
+  if (beg && end && end > beg)
+    mutt_buffer_strcpy_n(buf, beg, (size_t)(end - beg));
+  else
+    mutt_buffer_clear(buf);
 }
 
 static void increase_buffer_pool(void)
