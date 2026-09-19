@@ -489,7 +489,10 @@ check_attachments(ATTACH_CONTEXT *actx)
 
   for (i = 0; i < actx->idxlen; i++)
   {
-    if (actx->idx[i]->content->filename && (stat(actx->idx[i]->content->filename, &st) != 0))
+    if (!actx->idx[i]->content->filename)
+      continue;
+
+    if (stat(actx->idx[i]->content->filename, &st) != 0)
     {
       if (!pretty)
         pretty = mutt_buffer_pool_get();
