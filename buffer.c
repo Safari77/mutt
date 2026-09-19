@@ -100,15 +100,21 @@ size_t mutt_buffer_len(BUFFER *buf)
 void mutt_buffer_increase_size(BUFFER *buf, size_t new_size)
 {
   size_t offset;
+  int was_null;
+
+  if (!buf)
+    return;
 
   if (buf->dsize < new_size)
   {
+    was_null = (buf->data == NULL);
     offset = buf->data ? (buf->dptr - buf->data) : 0;
     buf->dsize = new_size;
     safe_realloc(&buf->data, buf->dsize);
     buf->dptr = buf->data + offset;
     /* This ensures an initially NULL buf->data is now properly terminated. */
-    *(buf->dptr) = '\0';
+    if (was_null)
+      *(buf->dptr) = '\0';
   }
 }
 
