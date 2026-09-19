@@ -48,10 +48,15 @@ static int mbox_to_udomain(const char *mbx, char **user, char **domain)
   static char *buff = NULL;
   char *p;
 
-  mutt_str_replace(&buff, mbx);
+  if (!mbx)
+    return -1;
 
-  p = strchr(buff, '@');
-  if (!p || !p[1])
+  mutt_str_replace(&buff, mbx);
+  if (!buff)
+    return -1;
+
+  p = strrchr(buff, '@');
+  if (!p || p == buff || !p[1])
     return -1;
   *p = '\0';
   *user = buff;
@@ -61,12 +66,12 @@ static int mbox_to_udomain(const char *mbx, char **user, char **domain)
 
 static int addr_is_local(ADDRESS *a)
 {
-  return (a->intl_checked && !a->is_intl);
+  return (a && a->intl_checked && !a->is_intl);
 }
 
 static int addr_is_intl(ADDRESS *a)
 {
-  return (a->intl_checked && a->is_intl);
+  return (a && a->intl_checked && a->is_intl);
 }
 
 static void set_local_mailbox(ADDRESS *a, char *local_mailbox)
@@ -352,7 +357,10 @@ const char *mutt_addr_for_display(ADDRESS *a)
 
   FREE(&buff);
 
-  if (!a || !a->mailbox || addr_is_local(a))
+  if (!a)
+    return NULL;
+
+  if (!a->mailbox || addr_is_local(a))
     return a->mailbox;
 
   if (mbox_to_udomain(a->mailbox, &user, &domain) == -1)
@@ -371,6 +379,9 @@ const char *mutt_addr_for_display(ADDRESS *a)
 
 void mutt_env_to_local(ENVELOPE *e)
 {
+  if (!e)
+    return;
+
   mutt_addrlist_to_local(e->return_path);
   mutt_addrlist_to_local(e->from);
   mutt_addrlist_to_local(e->to);
@@ -397,6 +408,13 @@ void mutt_env_to_local(ENVELOPE *e)
 int mutt_env_to_intl(ENVELOPE *env, char **tag, char **err)
 {
   int e = 0;
+
+  if (!env)
+    return 0;
+
+  if (tag)
+    *tag = NULL;
+
   H_TO_INTL(return_path);
   H_TO_INTL(from);
   H_TO_INTL(to);
