@@ -299,9 +299,9 @@ int mutt_monitor_poll(void)
             FOREVER
             {
               len = read(INotifyFd, buf, sizeof(buf));
-              if (len == -1)
+              if (len <= 0)
               {
-                if (errno != EAGAIN)
+                if (len == -1 && errno != EAGAIN)
                   mutt_errno_dbg(2, "monitor: read inotify events failed");
                 break;
               }
