@@ -169,6 +169,8 @@ int mutt_bcache_commit(body_cache_t *bcache, const char *id)
   BUFFER *tmpid;
   int rv;
 
+  if (!id)
+    return -1;
   tmpid = mutt_buffer_pool_get();
   mutt_buffer_printf(tmpid, "%s.tmp", id);
 
