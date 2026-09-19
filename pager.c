@@ -2540,7 +2540,7 @@ search_next:
             if (i >= 0) rd.topline = i;
           }
 
-          if (rd.lineInfo[rd.topline].search_cnt == 0)
+          if (rd.lineInfo[rd.topline].search_cnt <= 0)
           {
             rd.SearchFlag = 0;
             mutt_error _("Not found.");
