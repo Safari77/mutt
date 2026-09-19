@@ -261,7 +261,7 @@ resolve_color(struct line_t *lineInfo, int n, int cnt, int flags, int special,
       color = matching_chunk->color;
   }
 
-  if ((flags & MUTT_SEARCH) && lineInfo[m].search_cnt)
+  if ((flags & MUTT_SEARCH) && lineInfo[m].search_cnt > 0)
   {
     matching_chunk = bsearch(&cnt, lineInfo[m].search, lineInfo[m].search_cnt,
                              sizeof(struct syntax_t), comp_syntax_t);
