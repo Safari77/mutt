@@ -982,15 +982,19 @@ void mutt_sort_threads(CONTEXT *ctx, int init)
         thread->check_subject = 1;
 
         /* mark descendants as needing subject_changed checked */
-        for (tmp = (thread->child ? thread->child : thread); tmp != thread; )
+        for (tmp = thread->child; tmp; )
         {
-          while (!tmp->message)
-            tmp = tmp->child;
           tmp->check_subject = 1;
-          while (!tmp->next && tmp != thread)
-            tmp = tmp->parent;
-          if (tmp != thread)
+          if (tmp->child)
+            tmp = tmp->child;
+          else if (tmp->next)
             tmp = tmp->next;
+          else
+          {
+            while (!tmp->next && tmp->parent != thread)
+              tmp = tmp->parent;
+            tmp = tmp->next;
+          }
         }
 
         if (thread->parent)
