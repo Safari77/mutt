@@ -503,9 +503,10 @@ int mutt_monitor_remove(BUFFY *buffy)
     }
   }
 
-  inotify_rm_watch(info.monitor->descr, INotifyFd);
-  muttdbg(3, "monitor: inotify_rm_watch for '%s' descriptor=%d", info.path, info.monitor->descr);
-
+  if (inotify_rm_watch(INotifyFd, info.monitor->descr) == -1) {
+    mutt_errno_dbg(2, "monitor: inotify_rm_watch failed for '%s' descriptor=%d",
+                   info.path, info.monitor->descr);
+  }
   monitor_delete(info.monitor);
   monitor_check_free();
 
