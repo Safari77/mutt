@@ -157,7 +157,7 @@ static inline char *skip_email_wsp(const char *s)
  * inside Mutt, because on some platforms it can return true for
  * unexpected values, such as 0xa0 or 0x85.
  */
-#define IS_LOCALE_WS(c) isspace((unsigned char)c)
+#define IS_LOCALE_WS(c) isspace((unsigned char)(c))
 
 /* this macro must check for *c == 0 since isspace(0) has unreliable behavior
    on some systems */
