@@ -1265,11 +1265,11 @@ static int resolve_show_patterns(FILE *f, LOFF_T *last_pos, struct line_t *lineI
   if ((lineInfo[m].type == MT_COLOR_QUOTED) &&
       (lineInfo[m].quote == NULL))
   {
-    regexec((regex_t *) QuoteRegexp.rx, tmp_fmt, 1, pmatch, 0);
-    lineInfo[m].quote = classify_quote(QuoteList,
-                                       tmp_fmt + pmatch[0].rm_so,
-                                       pmatch[0].rm_eo - pmatch[0].rm_so,
-                                       force_redraw, q_level);
+    if (mutt_is_quote_line(tmp_fmt, pmatch))
+      lineInfo[m].quote = classify_quote(QuoteList,
+                                         tmp_fmt + pmatch[0].rm_so,
+                                         pmatch[0].rm_eo - pmatch[0].rm_so,
+                                         force_redraw, q_level);
   }
 
 done:
