@@ -1303,7 +1303,7 @@ void mutt_pretty_size(char *s, size_t len, uint64_t n)
              option(OPTSIZEUNITSONLEFT) ? "M%" PRIu64 : "%" PRIu64 "M",
              (n + 52428) / 1048576);
   }
-  else if (option(OPTSIZESHOWFRACTIONS) && (n < 10683731149ULL)) /* 1.0G - 9.9G */
+  else if (option(OPTSIZESHOWFRACTIONS) && (n < UINT64_C(10683731149))) /* 1.0G - 9.9G */
   {
     snprintf(s, len,
              option(OPTSIZEUNITSONLEFT) ? "G%3.1f" : "%3.1fG",
@@ -1314,7 +1314,7 @@ void mutt_pretty_size(char *s, size_t len, uint64_t n)
     /* (10683731149 + 53687091) / 1073741824 = 10 */
     snprintf(s, len,
              option(OPTSIZEUNITSONLEFT) ? "G%" PRIu64 : "%" PRIu64 "G",
-             (n + 53687091ULL) / 1073741824ULL);
+             (uint64_t)((n + 53687091ULL) / 1073741824ULL));
   }
 }
 
