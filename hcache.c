@@ -1014,8 +1014,8 @@ static char *get_foldername(const char *folder)
   if ((url_check_scheme(mutt_b2s(path)) == U_UNKNOWN) &&
       stat(mutt_b2s(path), &st) == 0)
   {
-    p = safe_malloc(PATH_MAX+1);
-    if (!realpath(mutt_b2s(path), p))
+    p = realpath(mutt_b2s(path), NULL);
+    if (!p)
       mutt_str_replace(&p, mutt_b2s(path));
   }
   else

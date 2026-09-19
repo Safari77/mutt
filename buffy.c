@@ -231,14 +231,13 @@ void mutt_update_mailbox(BUFFY * b)
 static BUFFY *buffy_new(const char *path)
 {
   BUFFY *buffy;
-  char rp[PATH_MAX] = "";
   char *r = NULL;
 
   buffy = (BUFFY *) safe_calloc(1, sizeof(BUFFY));
   buffy->pathbuf = mutt_buffer_new();
   mutt_buffer_strcpy(buffy->pathbuf, path);
-  r = realpath(path, rp);
-  buffy->realpath = safe_strdup(r ? rp : path);
+  r = realpath(path, NULL);
+  buffy->realpath = r ? r : safe_strdup(path);
   buffy->next = NULL;
   buffy->magic = 0;
 
@@ -258,15 +257,15 @@ static void buffy_free(BUFFY **mailbox)
 
 static BUFFY **find_buffy_slot(const char *path)
 {
-  const char *p;
-  char rp[PATH_MAX];
+  char *p;
   BUFFY **slot;
 
-  p = realpath(path, rp);
+  p = realpath(path, NULL);
   for (slot = &Incoming; *slot; slot = &((*slot)->next))
     if (mutt_strcmp(p ? p : path, (*slot)->realpath) == 0)
       break;
 
+  FREE(&p);
   return slot;
 }
 

@@ -1168,7 +1168,7 @@ void mutt_pretty_mailbox(char *s, size_t buflen)
   char *p = s, *q = s;
   size_t len;
   url_scheme_t scheme;
-  char tmp[PATH_MAX];
+  char *tmprp;
 
   scheme = url_check_scheme(s);
 
@@ -1216,8 +1216,11 @@ void mutt_pretty_mailbox(char *s, size_t buflen)
   }
   else if (strstr(p, "..") &&
            (scheme == U_UNKNOWN || scheme == U_FILE) &&
-           realpath(p, tmp))
-    strfcpy(p, tmp, buflen - (p - s));
+           (tmprp = realpath(p, NULL)))
+  {
+    strfcpy(p, tmprp, buflen - (p - s));
+    FREE(&tmprp);
+  }
 
   if (mutt_strncmp(s, Maildir, (len = mutt_strlen(Maildir))) == 0 &&
       s[len] == '/')
