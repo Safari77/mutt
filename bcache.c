@@ -39,7 +39,7 @@ struct body_cache {
 
 static int bcache_path(ACCOUNT *account, const char *mailbox, body_cache_t *bcache)
 {
-  char host[STRING];
+  char host[LONG_STRING];
   BUFFER *path, *dst;
   ciss_url_t url;
 
