@@ -2602,8 +2602,7 @@ search_next:
           rd.hideQuoted ^= MUTT_HIDE;
           if (rd.hideQuoted && rd.lineInfo[rd.topline].type == MT_COLOR_QUOTED)
             rd.topline = upNLines(1, rd.lineInfo, rd.topline, rd.hideQuoted);
-          else
-            pager_menu->redraw = REDRAW_BODY;
+          pager_menu->redraw = REDRAW_BODY;
         }
         break;
 
