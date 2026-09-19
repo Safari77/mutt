@@ -645,7 +645,7 @@ static void cmd_parse_capability(IMAP_DATA *idata, char *s)
       if (imap_wordcaseeq(Capabilities[x], s))
       {
         mutt_bit_set(idata->capabilities, x);
-        muttdbg(4, (debugfile, " Found capability \"%s\": %d\n", Capabilities[x], x));
+        muttdbg(4, " Found capability \"%s\": %d\n", Capabilities[x], x);
         found = 1;
         break;
       }
@@ -654,8 +654,10 @@ static void cmd_parse_capability(IMAP_DATA *idata, char *s)
         if (imap_wordcaseeq(Capability_Aliases[x].name, s))
         {
           mutt_bit_set(idata->capabilities, Capability_Aliases[x].value);
-          muttdbg(4, (debugfile, " Found capability \"%s\": %d\n", Capability_Aliases[x].name,
-                  Capability_Aliases[x].value)); found = 1; break;
+          muttdbg(4, " Found capability \"%s\": %d\n", Capability_Aliases[x].name,
+                  Capability_Aliases[x].value);
+          found = 1;
+          break;
         }
       }
     }
