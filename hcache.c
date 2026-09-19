@@ -650,7 +650,7 @@ mutt_hcache_per_folder(BUFFER *hcpath, const char *path, const char *folder,
   }
   else
   {
-    md5_buffer(folder, strlen(folder), &md5sum);
+    md5_buffer(folder, strlen(folder), md5sum);
     mutt_buffer_printf(hcfile,
                        "%02x%02x%02x%02x%02x%02x%02x%02x"
                        "%02x%02x%02x%02x%02x%02x%02x%02x",
