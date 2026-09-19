@@ -137,9 +137,16 @@ static void monitor_check_free(void)
   if (!Monitor && INotifyFd != -1)
   {
     mutt_poll_fd_remove(INotifyFd);
+    mutt_poll_fd_remove(0);
     close(INotifyFd);
     INotifyFd = -1;
-    MonitorFilesChanged = 0;
+    MonitorContextDescriptor = -1;
+    FREE(&PollFds);
+    PollFdsLen = 0;
+    /* Do NOT reset MonitorFilesChanged here: if monitor_check_free() was
+     * invoked via monitor_handle_ignore() because the last monitored file
+     * was removed or replaced, resetting MonitorFilesChanged would discard
+     * the change notification for the current poll cycle. */
   }
 }
 
