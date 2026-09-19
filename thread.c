@@ -1348,6 +1348,9 @@ int _mutt_traverse_thread(CONTEXT *ctx, HEADER *cur, int flag)
     thread = thread->child;
   cur = thread->message;
 
+  if (cur->virtual != -1)
+    roothdr = cur;
+
   if (!cur->read && CHECK_LIMIT)
   {
     if (cur->old)
@@ -1418,7 +1421,8 @@ int _mutt_traverse_thread(CONTEXT *ctx, HEADER *cur, int flag)
             cur->virtual = cur->msgno;
         }
       }
-
+      else if (!roothdr && cur->virtual != -1)
+        roothdr = cur;
 
       if (!cur->read && CHECK_LIMIT)
       {
@@ -1428,8 +1432,24 @@ int _mutt_traverse_thread(CONTEXT *ctx, HEADER *cur, int flag)
           new = 1;
         if (cur->msgno < min_unread_msgno)
         {
-          min_unread = cur->virtual;
           min_unread_msgno = cur->msgno;
+          if (cur->virtual != -1)
+            min_unread = cur->virtual;
+          else
+          {
+            /* For collapsed messages, find the nearest visible ancestor */
+            THREAD *p;
+            for (p = thread->parent; p; p = p->parent)
+            {
+              if (p->message && p->message->virtual != -1)
+              {
+                min_unread = p->message->virtual;
+                break;
+              }
+            }
+            if (!p && roothdr)
+              min_unread = roothdr->virtual;
+          }
         }
       }
 
@@ -1501,12 +1521,15 @@ int _mutt_traverse_thread(CONTEXT *ctx, HEADER *cur, int flag)
   else if (flag & MUTT_THREAD_UNREAD)
     return ((old && new) ? new : (old ? old : new));
   else if (flag & MUTT_THREAD_NEXT_UNREAD)
+  {
+    if (min_unread == -1 && min_unread_msgno != INT_MAX && roothdr)
+      min_unread = roothdr->virtual;
     return (min_unread);
+  }
 
   return (0);
 #undef CHECK_LIMIT
 }
-
 
 /* if flag is 0, we want to know how many messages
  * are in the thread.  if flag is 1, we want to know
