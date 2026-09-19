@@ -21,7 +21,11 @@
 #ifndef _MUTT_ACCOUNT_H_
 #define _MUTT_ACCOUNT_H_ 1
 
+#include <stddef.h>
+
 #include "url.h"
+#include "buffer.h"
+#include "mutt.h"
 
 /* account types */
 enum

@@ -1,5 +1,9 @@
-#ifndef _URL_H
-# define _URL_H
+#pragma once
+
+#include <stddef.h>
+
+#include "buffer.h"
+#include "mutt.h"
 
 typedef enum url_scheme
 {
@@ -33,5 +37,3 @@ int url_parse_ciss(ciss_url_t *ciss, char *src);
 int url_ciss_tostring(ciss_url_t *ciss, char *dest, size_t len, int flags);
 int url_ciss_tobuffer(ciss_url_t *ciss, BUFFER *dest, int flags);
 int url_parse_mailto(ENVELOPE *e, char **body, const char *src);
-
-#endif
