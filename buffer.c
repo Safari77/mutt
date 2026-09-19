@@ -86,8 +86,8 @@ BUFFER *mutt_buffer_from(char *seed)
 
   b = mutt_buffer_new();
   b->data = safe_strdup(seed);
-  b->dsize = mutt_strlen(seed);
-  b->dptr = (char *) b->data + b->dsize;
+  b->dsize = mutt_strlen(seed) + 1;
+  b->dptr = b->data + (b->dsize - 1);
   return b;
 }
 
