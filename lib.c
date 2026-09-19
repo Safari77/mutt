@@ -32,6 +32,7 @@
 # include "config.h"
 #endif
 
+#include <assert.h>
 #include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
@@ -162,6 +163,8 @@ void *safe_malloc(size_t siz)
 
 void safe_realloc(void *ptr, size_t siz)
 {
+  assert(ptr != NULL);
+
   void *r;
   void **p = (void **)ptr;
 

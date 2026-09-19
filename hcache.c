@@ -192,17 +192,31 @@ lazy_malloc(size_t siz)
   return safe_malloc(siz);
 }
 
+#define LAZY_PAGE 4096
 static void
 lazy_realloc(void *ptr, size_t siz)
 {
   void **p = (void **) ptr;
 
-  if (p != NULL && 0 < siz && siz < 4096)
+  if (!p)
     return;
 
-  /* grow in page-sized chunks: round up to the next multiple of 4096 so
-   * large headers realloc once per 4KB boundary instead of on every append */
-  siz = (siz + 4095) & ~((size_t) 4095);
+  /* If memory is already allocated and fits within the first 4KB chunk, return.
+   * Note: Truly reallocating once per 4KB boundary for siz >= 4096 requires
+   * tracking the currently allocated capacity across calls. */
+  if (*p != NULL && 0 < siz && siz < LAZY_PAGE)
+    return;
+
+  /* Check for integer overflow before rounding up */
+  if (siz > SIZE_MAX - (LAZY_PAGE - 1))
+  {
+    mutt_error _("Out of memory!");
+    sleep(1);
+    mutt_exit(1);
+  }
+
+  /* grow in page-sized chunks: round up to the next multiple of 4096 */
+  siz = (siz + (LAZY_PAGE - 1)) & ~(size_t) (LAZY_PAGE - 1);
 
   safe_realloc(ptr, siz);
 }
