@@ -131,6 +131,7 @@ static void calculate_visibility(CONTEXT *ctx, int *max_depth)
   int hide_top_limited = option(OPTHIDETOPLIMITED) && !option(OPTHIDELIMITED);
   int depth = 0;
 
+  if (!tree) return;
   /* we walk each level backwards to make it easier to compute next_subtree_visible */
   while (tree->next)
     tree = tree->next;
