@@ -21,6 +21,7 @@
 #ifndef _ATTACH_H_
 #define _ATTACH_H_ 1
 
+#include <stddef.h>
 #include "mutt_menu.h"
 
 typedef struct attachptr
@@ -30,7 +31,7 @@ typedef struct attachptr
   int parent_type;
   char *tree;
   int level;
-  int num;
+  size_t num;
   unsigned int unowned : 1;   /* don't unlink on detach */
   unsigned int decrypted : 1;   /* not part of message as stored in the hdr->content. */
 } ATTACHPTR;
@@ -41,19 +42,19 @@ typedef struct attach_ctx
   FILE *root_fp;        /* used by recvattach for updating */
 
   ATTACHPTR **idx;
-  short idxlen;
-  short idxmax;
+  size_t idxlen;
+  size_t idxmax;
 
-  short *v2r;             /* mapping from virtual to real attachment */
-  short vcount;           /* the number of virtual attachments */
+  size_t *v2r;          /* mapping from virtual to real attachment */
+  size_t vcount;        /* the number of virtual attachments */
 
   FILE **fp_idx;        /* Extra FILE* used for decryption */
-  short fp_len;
-  short fp_max;
+  size_t fp_len;
+  size_t fp_max;
 
   BODY **body_idx;      /* Extra BODY* used for decryption */
-  short body_len;
-  short body_max;
+  size_t body_len;
+  size_t body_max;
 } ATTACH_CONTEXT;
 
 void mutt_attach_init(ATTACH_CONTEXT *);

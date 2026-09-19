@@ -1111,13 +1111,13 @@ out:
 
 void mutt_actx_add_attach(ATTACH_CONTEXT *actx, ATTACHPTR *attach)
 {
-  int i;
+  size_t i;
 
   if (actx->idxlen == actx->idxmax)
   {
     actx->idxmax += 5;
     safe_realloc(&actx->idx, sizeof(ATTACHPTR *) * actx->idxmax);
-    safe_realloc(&actx->v2r, sizeof(short) * actx->idxmax);
+    safe_realloc(&actx->v2r, sizeof(size_t) * actx->idxmax);
     for (i = actx->idxlen; i < actx->idxmax; i++)
       actx->idx[i] = NULL;
   }
@@ -1127,7 +1127,7 @@ void mutt_actx_add_attach(ATTACH_CONTEXT *actx, ATTACHPTR *attach)
 
 void mutt_actx_add_fp(ATTACH_CONTEXT *actx, FILE *new_fp)
 {
-  int i;
+  size_t i;
 
   if (actx->fp_len == actx->fp_max)
   {
@@ -1142,7 +1142,7 @@ void mutt_actx_add_fp(ATTACH_CONTEXT *actx, FILE *new_fp)
 
 void mutt_actx_add_body(ATTACH_CONTEXT *actx, BODY *new_body)
 {
-  int i;
+  size_t i;
 
   if (actx->body_len == actx->body_max)
   {
@@ -1157,7 +1157,7 @@ void mutt_actx_add_body(ATTACH_CONTEXT *actx, BODY *new_body)
 
 void mutt_actx_free_entries(ATTACH_CONTEXT *actx)
 {
-  int i;
+  size_t i;
 
   for (i = 0; i < actx->idxlen; i++)
   {
