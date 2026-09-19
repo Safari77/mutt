@@ -141,9 +141,13 @@ FILE *mutt_bcache_put(body_cache_t *bcache, const char *id, int tmp)
   if ((fp = safe_fopen(mutt_b2s(path), "w+")))
     goto out;
 
-  if (errno == EEXIST)
-    /* clean up leftover tmp file */
+  /* clean up leftover tmp file and retry */
+  if (tmp && errno == EEXIST)
+  {
     mutt_unlink(mutt_b2s(path));
+    if ((fp = safe_fopen(mutt_b2s(path), "w+")))
+      goto out;
+  }
 
   if (mutt_buffer_len(path))
     s = strchr(path->data + 1, '/');
@@ -152,8 +156,11 @@ FILE *mutt_bcache_put(body_cache_t *bcache, const char *id, int tmp)
     /* create missing path components */
     *s = '\0';
     if (stat(mutt_b2s(path), &sb) < 0 &&
-        (errno != ENOENT || mkdir(mutt_b2s(path), 0777) < 0))
+        (errno != ENOENT || mkdir(mutt_b2s(path), 0700) < 0))
+    {
+      *s = '/'; /* restore separator before leaving path */
       goto out;
+    }
     *s = '/';
     s = strchr(s + 1, '/');
   }
