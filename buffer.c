@@ -77,7 +77,7 @@ void mutt_buffer_rewind(BUFFER *b)
 }
 
 /* Creates and initializes a BUFFER by copying the seed string. */
-BUFFER *mutt_buffer_from(char *seed)
+BUFFER *mutt_buffer_from(const char *seed)
 {
   BUFFER *b;
 
