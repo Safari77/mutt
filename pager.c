@@ -1142,7 +1142,15 @@ void mutt_buffer_strip_formatting(BUFFER *dest, const char *src, int strip_marke
         s += 2;
       else if (*(s+1) && mutt_buffer_len(dest))        /* bold or overstrike */
       {
-        dest->dptr--;
+        /* UTF-8 aware backspace */
+        if (dest->dptr > dest->data)
+        {
+          char *ptr = dest->dptr - 1;
+          while (ptr > dest->data && (*ptr & 0xC0) == 0x80)
+            ptr--;
+          dest->dptr = ptr;
+        }
+
         mutt_buffer_addch(dest, *(s+1));
         s += 2;
       }
@@ -1151,8 +1159,11 @@ void mutt_buffer_strip_formatting(BUFFER *dest, const char *src, int strip_marke
     }
     else if (*s == '\033' && *(s+1) == '[' && is_ansi(s + 2))
     {
-      while (*s++ != 'm')       /* skip ANSI sequence */
-        ;
+      /* Prevent buffer overread on malformed ANSI sequence */
+      while (*s && *s != 'm')
+        s++;
+      if (*s == 'm')
+        s++;
     }
     else if (strip_markers &&
              *s == '\033' && *(s+1) == ']' &&
@@ -1160,8 +1171,12 @@ void mutt_buffer_strip_formatting(BUFFER *dest, const char *src, int strip_marke
               (check_protected_header_marker(s) == 0)))
     {
       muttdbg(2, "Seen attachment marker.");
-      while (*s++ != '\a')      /* skip pseudo-ANSI sequence */
-        ;
+
+      /* Prevent buffer overread on malformed marker sequence */
+      while (*s && *s != '\a')
+        s++;
+      if (*s == '\a')
+        s++;
     }
     else
       mutt_buffer_addch(dest, *s++);
