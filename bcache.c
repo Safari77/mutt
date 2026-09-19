@@ -272,7 +272,10 @@ int mutt_bcache_list(body_cache_t *bcache,
     muttdbg(3, "bcache: list: dir: '%s', id :'%s'", bcache->path, de->d_name);
 
     if (want_id && want_id(de->d_name, bcache, data) != 0)
+    {
+      rc = -1;
       goto out;
+    }
 
     rc++;
   }
