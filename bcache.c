@@ -42,6 +42,9 @@ static int bcache_path(ACCOUNT *account, const char *mailbox, body_cache_t *bcac
   char host[LONG_STRING];
   BUFFER *path, *dst;
   ciss_url_t url;
+  const char *p;
+  size_t len;
+  int rc = -1;
 
   if (!account || !MessageCachedir || !bcache)
     return -1;
@@ -65,16 +68,37 @@ static int bcache_path(ACCOUNT *account, const char *mailbox, body_cache_t *bcac
   dst = mutt_buffer_pool_get();
   mutt_encode_path(path, NONULL(mailbox));
 
-  mutt_buffer_printf(dst, "%s/%s%s", MessageCachedir, host, mutt_b2s(path));
+  p = mutt_b2s(path);
+  len = mutt_strlen(p);
+
+  /* reject any directory traversal attempts using ".." path components */
+  if (mutt_strcmp(p, "..") == 0 ||
+      mutt_strncmp(p, "../", 3) == 0 ||
+      strstr(p, "/../") != NULL ||
+      (len >= 3 && mutt_strcmp(p + len - 3, "/..") == 0))
+  {
+    muttdbg(1, "bcache_path: directory traversal detected in mailbox: '%s'", p);
+    goto out;
+  }
+
+  /* strip any leading slashes so mailbox path remains relative to cache dir */
+  while (*p == '/')
+    p++;
+
+  mutt_buffer_printf(dst, "%s/%s%s", MessageCachedir, host, p);
+
+  /* ensure trailing slash while guarding against out-of-bounds read on empty buffer */
   if (mutt_buffer_len(dst) > 0 && *(dst->dptr - 1) != '/')
     mutt_buffer_addch(dst, '/');
 
   muttdbg(3, "path: '%s'", mutt_b2s(dst));
   bcache->path = safe_strdup(mutt_b2s(dst));
+  rc = 0;
 
+out:
   mutt_buffer_pool_release(&path);
   mutt_buffer_pool_release(&dst);
-  return 0;
+  return rc;
 }
 
 body_cache_t *mutt_bcache_open(ACCOUNT *account, const char *mailbox)
