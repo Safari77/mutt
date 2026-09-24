@@ -1042,14 +1042,17 @@ hcache_open_qdbm(struct header_cache *h, const char *path)
 }
 
 void
-mutt_hcache_close(header_cache_t *h)
+mutt_hcache_close(header_cache_t **ph)
 {
-  if (!h)
+  header_cache_t *h;
+
+  if (!ph || !*ph)
     return;
 
+  h = *ph;
   vlclose(h->db);
   FREE(&h->folder);
-  FREE(&h);
+  FREE(ph);  /* __FREE_CHECKED__ */
 }
 
 int
@@ -1097,11 +1100,14 @@ hcache_open_tc(struct header_cache *h, const char *path)
 }
 
 void
-mutt_hcache_close(header_cache_t *h)
+mutt_hcache_close(header_cache_t **ph)
 {
-  if (!h)
+  header_cache_t *h;
+
+  if (!ph || !*ph)
     return;
 
+  h = *ph;
   if (!tcbdbclose(h->db))
   {
 #ifdef DEBUG
@@ -1111,7 +1117,7 @@ mutt_hcache_close(header_cache_t *h)
   }
   tcbdbdel(h->db);
   FREE(&h->folder);
-  FREE(&h);
+  FREE(ph);  /* __FREE_CHECKED__ */
 }
 
 int
@@ -1174,17 +1180,20 @@ cleanup:
 }
 
 void
-mutt_hcache_close(header_cache_t *h)
+mutt_hcache_close(header_cache_t **ph)
 {
-  if (!h)
+  header_cache_t *h;
+
+  if (!ph || !*ph)
     return;
 
+  h = *ph;
   if (!kcdbclose(h->db))
     muttdbg(2, "kcdbclose failed for %s: %s (ecode %d)", h->folder,
             kcdbemsg(h->db), kcdbecode(h->db));
   kcdbdel(h->db);
   FREE(&h->folder);
-  FREE(&h);
+  FREE(ph);  /* __FREE_CHECKED__ */
 }
 
 int
@@ -1238,16 +1247,19 @@ cleanup:
 }
 
 void
-mutt_hcache_close(header_cache_t *h)
+mutt_hcache_close(header_cache_t **ph)
 {
-  if (!h)
+  header_cache_t *h;
+
+  if (!ph || !*ph)
     return;
 
+  h = *ph;
   if (!tkrzw_dbm_close(h->db))
     muttdbg(2, "tkrzw_dbm_close failed for %s: %s (ecode %d)", h->folder,
             tkrzw_get_last_status_message(), tkrzw_get_last_status_code());
   FREE(&h->folder);
-  FREE(&h);
+  FREE(ph);  /* __FREE_CHECKED__ */
 }
 
 int
@@ -1295,14 +1307,17 @@ hcache_open_gdbm(struct header_cache *h, const char *path)
 }
 
 void
-mutt_hcache_close(header_cache_t *h)
+mutt_hcache_close(header_cache_t **ph)
 {
-  if (!h)
+  header_cache_t *h;
+
+  if (!ph || !*ph)
     return;
 
+  h = *ph;
   gdbm_close(h->db);
   FREE(&h->folder);
-  FREE(&h);
+  FREE(ph);  /* __FREE_CHECKED__ */
 }
 
 int
@@ -1410,11 +1425,14 @@ fail_close:
 }
 
 void
-mutt_hcache_close(header_cache_t *h)
+mutt_hcache_close(header_cache_t **ph)
 {
-  if (!h)
+  header_cache_t *h;
+
+  if (!ph || !*ph)
     return;
 
+  h = *ph;
   h->db->close(h->db, 0);
   h->env->close(h->env, 0);
   mx_unlock_file(mutt_b2s(h->lockfile), h->fd, 0);
@@ -1422,7 +1440,7 @@ mutt_hcache_close(header_cache_t *h)
   unlink(mutt_b2s(h->lockfile));
   mutt_buffer_free(&h->lockfile);
   FREE(&h->folder);
-  FREE(&h);
+  FREE(ph);  /* __FREE_CHECKED__ */
 }
 
 int
@@ -1490,13 +1508,15 @@ fail_env:
 }
 
 void
-mutt_hcache_close(header_cache_t *h)
+mutt_hcache_close(header_cache_t **ph)
 {
+  header_cache_t *h;
   int rc;
 
-  if (!h)
+  if (!ph || !*ph)
     return;
 
+  h = *ph;
   if (h->txn)
   {
     if (h->txn_mode == txn_write)
@@ -1515,7 +1535,7 @@ mutt_hcache_close(header_cache_t *h)
 
   mdb_env_close(h->env);
   FREE(&h->folder);
-  FREE(&h);
+  FREE(ph);  /* __FREE_CHECKED__ */
 }
 
 int
