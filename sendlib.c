@@ -1105,6 +1105,7 @@ void mutt_message_to_7bit(BODY *a, FILE *fp)
   FILE *fpin = NULL;
   FILE *fpout = NULL;
   struct stat sb;
+  HEADER *saved_hdr = NULL;
 
   if (!a->filename && fp)
     fpin = fp;
@@ -1135,6 +1136,10 @@ void mutt_message_to_7bit(BODY *a, FILE *fp)
   }
 
   fseeko(fpin, a->offset, SEEK_SET);
+  /* Note: mutt_parse_messageRFC822() overwrites a->hdr, so it needs to be
+   * saved and restored below.
+   */
+  saved_hdr = a->hdr;
   a->parts = mutt_parse_messageRFC822(fpin, a);
 
   transform_to_7bit(a->parts, fpin);
@@ -1164,8 +1169,14 @@ void mutt_message_to_7bit(BODY *a, FILE *fp)
     goto cleanup;
   }
   a->length = sb.st_size;
-  mutt_free_body(&a->parts);
-  a->hdr->content = NULL;
+
+  if (saved_hdr)
+  {
+    mutt_free_header(&a->hdr);
+    a->hdr = saved_hdr;
+  }
+  mutt_free_body(&a->hdr->content);
+  a->parts = NULL;
 
 cleanup:
   if (fpin && fpin != fp)
