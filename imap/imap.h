@@ -34,7 +34,7 @@ typedef struct
 /* imap.c */
 int imap_access(const char *path);
 int imap_check_mailbox(CONTEXT *ctx, int *index_hint, int force);
-int imap_delete_mailbox(CONTEXT *idata, IMAP_MBOX mx);
+int imap_delete_mailbox(CONTEXT *idata, IMAP_MBOX *mx);
 int imap_sync_mailbox(CONTEXT *ctx, int expunge, int *index_hint);
 int imap_close_mailbox(CONTEXT *ctx);
 int imap_buffy_check(int force, int check_stats);
@@ -65,6 +65,7 @@ void imap_logout_all(void);
 int imap_expand_path(BUFFER *path);
 int imap_buffer_remove_path_password(BUFFER *dest, const char *src);
 int imap_parse_path(const char *path, IMAP_MBOX *mx);
+void imap_mbox_free(IMAP_MBOX *mbox);
 void imap_pretty_mailbox(char *path, size_t pathlen);
 
 int imap_wait_keepalive(pid_t pid);

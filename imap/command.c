@@ -275,7 +275,7 @@ int imap_exec(IMAP_DATA *idata, const char *cmdstr, int flags)
       (ImapPollTimeout > 0) &&
       (mutt_socket_poll(idata->conn, ImapPollTimeout)) == 0)
   {
-    mutt_error(_("Connection to %s timed out"), idata->conn->account.host);
+    mutt_error(_("Connection to %s timed out"), NONULL(idata->conn->account.host));
     mutt_sleep(0);
     cmd_handle_fatal(idata);
     return -1;
@@ -356,7 +356,7 @@ int imap_cmd_idle(IMAP_DATA *idata)
   if ((ImapPollTimeout > 0) &&
       (mutt_socket_poll(idata->conn, ImapPollTimeout)) == 0)
   {
-    mutt_error(_("Connection to %s timed out"), idata->conn->account.host);
+    mutt_error(_("Connection to %s timed out"), NONULL(idata->conn->account.host));
     mutt_sleep(0);
     cmd_handle_fatal(idata);
     return -1;
@@ -511,7 +511,7 @@ static void cmd_handle_fatal(IMAP_DATA *idata)
     mx_fastclose_mailbox(idata->ctx);
     mutt_socket_close(idata->conn);
     mutt_error(_("Mailbox %s@%s closed"),
-               idata->conn->account.login, idata->conn->account.host);
+               NONULL(idata->conn->account.login), NONULL(idata->conn->account.host));
     mutt_sleep(1);
     idata->state = IMAP_DISCONNECTED;
   }
@@ -1146,7 +1146,7 @@ static void cmd_parse_status(IMAP_DATA *idata, char *s)
   char *mailbox;
   char *value;
   BUFFY *inc;
-  IMAP_MBOX mx;
+  IMAP_MBOX mx = { 0 };
   unsigned long ulcount;
   unsigned int count;
   IMAP_STATUS *status;
@@ -1258,7 +1258,7 @@ static void cmd_parse_status(IMAP_DATA *idata, char *s)
       {
         value = safe_strdup(mx.mbox);
         imap_fix_path(idata, mx.mbox, value, mutt_strlen(value) + 1);
-        FREE(&mx.mbox);
+        imap_mbox_free(&mx);
       }
       else
         value = safe_strdup("INBOX");
@@ -1300,6 +1300,7 @@ static void cmd_parse_status(IMAP_DATA *idata, char *s)
              opened */
           status->uidnext = oldun;
 
+        imap_mbox_free(&mx);
         FREE(&value);
         return;
       }
@@ -1307,7 +1308,7 @@ static void cmd_parse_status(IMAP_DATA *idata, char *s)
       FREE(&value);
     }
 
-    FREE(&mx.mbox);
+    imap_mbox_free(&mx);
   }
 }
 
