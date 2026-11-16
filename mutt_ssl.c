@@ -46,8 +46,11 @@
 #define SSL_has_pending SSL_pending
 #endif
 
+#if (defined(OPENSSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x40100000L)
+  #define mutt_get_asn1_string_length(str) ASN1_STRING_get_length((str))
+  #define mutt_get_asn1_string_data(str) ASN1_STRING_get0_data((str))
 /* Starting OpenSSL v4, the ASN1_STRING type is now opaque */
-#if (defined(OPENSSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x40000000L)
+#elif (defined(OPENSSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x40000000L)
   #define mutt_get_asn1_string_length(str) ASN1_STRING_length((str))
   #define mutt_get_asn1_string_data(str) ASN1_STRING_get0_data((str))
 #else
@@ -122,6 +125,10 @@ static int ssl_load_certificates(SSL_CTX *ctx)
   X509 *cert = NULL;
   X509_STORE *store;
   int rv = 1;
+  time_t now;
+#ifdef DEBUG
+  char buf[STRING];
+#endif
 
   muttdbg(2, "loading trusted certificates");
   store = SSL_CTX_get_cert_store(ctx);
@@ -136,8 +143,12 @@ static int ssl_load_certificates(SSL_CTX *ctx)
 
   while (NULL != PEM_read_X509(fp, &cert, NULL, NULL))
   {
-    if ((X509_cmp_current_time(X509_get0_notBefore(cert)) >= 0) ||
-        (X509_cmp_current_time(X509_get0_notAfter(cert)) <= 0))
+    now = time(NULL);
+    /* "not before" must be before now.  "not after" mutt be after now.
+     * The function returns -2 on error, which we also count as a failure.
+     */
+    if ((ASN1_TIME_cmp_time_t(X509_get0_notBefore(cert), now) != -1) ||
+        (ASN1_TIME_cmp_time_t(X509_get0_notAfter(cert), now) != 1))
     {
 #ifdef DEBUG
       char certbuf[STRING];
@@ -746,15 +757,36 @@ static void ssl_dprint_err_stack(void)
 }
 
 
-static char *x509_get_part(X509_NAME *name, int nid)
+static int x509_get_part(BUFFER *output, const X509_NAME *name, int nid)
 {
-  static char ret[SHORT_STRING];
+  int index;
+  const X509_NAME_ENTRY *entry;
+  const ASN1_STRING *asn1_str;
+  unsigned char *utf8_str;
+  int utf8_len;
 
-  if (!name ||
-      X509_NAME_get_text_by_NID(name, nid, ret, sizeof(ret)) < 0)
-    strfcpy(ret, _("Unknown"), sizeof(ret));
+  mutt_buffer_clear(output);
 
-  return ret;
+  index = X509_NAME_get_index_by_NID(name, nid, -1);
+  if (index < 0)
+    return -1;
+
+  entry = X509_NAME_get_entry(name, index);
+  if (!entry)
+    return -1;
+
+  asn1_str = X509_NAME_ENTRY_get_data(entry);
+  if (!asn1_str)
+    return -1;
+
+  utf8_len = ASN1_STRING_to_UTF8(&utf8_str, asn1_str);
+  if (utf8_len < 0)
+    return -1;
+
+  mutt_buffer_addstr_n(output, (const char *)utf8_str, utf8_len);
+
+  OPENSSL_free(utf8_str);
+  return 0;
 }
 
 static void x509_fingerprint(char *s, int l, X509 * cert, const EVP_MD *(*hashfunc)(void))
@@ -845,9 +877,14 @@ static int check_certificate_cache(X509 *peercert)
 
 static int check_certificate_expiration(X509 *peercert, int silent)
 {
+  time_t now;
+
   if (option(OPTSSLVERIFYDATES) != MUTT_NO)
   {
-    if (X509_cmp_current_time(X509_get0_notBefore(peercert)) >= 0)
+    now = time(NULL);
+
+    /* "not before" must be before now */
+    if (ASN1_TIME_cmp_time_t(X509_get0_notBefore(peercert), now) != -1)
     {
       if (!silent)
       {
@@ -857,7 +894,8 @@ static int check_certificate_expiration(X509 *peercert, int silent)
       }
       return 0;
     }
-    if (X509_cmp_current_time(X509_get0_notAfter(peercert)) <= 0)
+    /* "not after" must be after now */
+    if (ASN1_TIME_cmp_time_t(X509_get0_notAfter(peercert), now) != 1)
     {
       if (!silent)
       {
@@ -958,11 +996,10 @@ static int check_host(X509 *x509cert, const char *hostname, char *err, size_t er
 {
   int i, rc = 0;
   /* hostname in ASCII format: */
-  char *hostname_ascii = NULL;
+  char *hostname_ascii = NULL, *common_name_ascii = NULL;
   /* needed to get the common name: */
-  X509_NAME *x509_subject;
-  char *buf = NULL;
-  int bufsize;
+  const X509_NAME *x509_subject;
+  BUFFER *common_name_buf = NULL;
   /* needed to get the DNS subjectAltNames: */
   STACK_OF(GENERAL_NAME) *subj_alt_names;
   int subj_alt_names_count;
@@ -1026,30 +1063,26 @@ static int check_host(X509 *x509cert, const char *hostname, char *err, size_t er
       goto out;
     }
 
-    /* first get the space requirements */
-    bufsize = X509_NAME_get_text_by_NID(x509_subject, NID_commonName,
-                                        NULL, 0);
-    if (bufsize == -1)
+    common_name_buf = mutt_buffer_pool_get();
+    if (x509_get_part(common_name_buf, x509_subject, NID_commonName) < 0)
     {
       if (err && errlen)
         strfcpy(err, _("cannot get certificate common name"), errlen);
       goto out;
     }
-    bufsize++; /* space for the terminal nul char */
-    buf = safe_malloc((size_t)bufsize);
-    if (X509_NAME_get_text_by_NID(x509_subject, NID_commonName,
-                                  buf, bufsize) == -1)
+
+    /* This checks for embedded nuls */
+    if (mutt_buffer_len(common_name_buf) > 0 &&
+        mutt_buffer_len(common_name_buf) == mutt_strlen(mutt_b2s(common_name_buf)))
     {
-      if (err && errlen)
-        strfcpy(err, _("cannot get certificate common name"), errlen);
-      goto out;
-    }
-    /* cast is safe since bufsize is incremented above, so bufsize-1 is always
-     * zero or greater.
-     */
-    if (mutt_strlen(buf) == (size_t)bufsize - 1)
-    {
-      match_found = hostname_match(hostname_ascii, buf);
+#if defined(HAVE_LIBIDN) || defined(HAVE_LIBIDN2)
+      if (idna_to_ascii_8z(mutt_b2s(common_name_buf), &common_name_ascii, 0) != IDNA_SUCCESS)
+        common_name_ascii = safe_strdup(mutt_b2s(common_name_buf));
+#else
+      common_name_ascii = safe_strdup(mutt_b2s(common_name_buf));
+#endif
+      match_found = hostname_match(hostname_ascii, common_name_ascii);
+      FREE(&common_name_ascii);
     }
   }
 
@@ -1064,7 +1097,7 @@ static int check_host(X509 *x509cert, const char *hostname, char *err, size_t er
   rc = 1;
 
 out:
-  FREE(&buf);
+  mutt_buffer_pool_release(&common_name_buf);
   FREE(&hostname_ascii);
 
   return rc;
@@ -1207,14 +1240,14 @@ static int interactive_check_cert(X509 *cert, int idx, int len, SSL *ssl, int al
       NID_localityName,           /* L */
       NID_stateOrProvinceName,    /* ST */
       NID_countryName             /* C */ };
-  X509_NAME *x509_subject;
-  X509_NAME *x509_issuer;
+  const X509_NAME *x509_subject;
+  const X509_NAME *x509_issuer;
   char helpstr[LONG_STRING];
   char buf[STRING];
   char title[STRING];
   MUTTMENU *menu;
   int done;
-  BUFFER *drow = NULL;
+  BUFFER *drow = NULL, *x509_part_buf = NULL;
   unsigned u;
   FILE *fp;
   int allow_skip = 0, reset_ignoremacro = 0;
@@ -1230,12 +1263,15 @@ static int interactive_check_cert(X509 *cert, int idx, int len, SSL *ssl, int al
   mutt_push_current_menu(menu);
 
   drow = mutt_buffer_pool_get();
+  x509_part_buf = mutt_buffer_pool_get();
 
   mutt_menu_add_dialog_row(menu, _("This certificate belongs to:"));
   x509_subject = X509_get_subject_name(cert);
   for (u = 0; u < mutt_array_size(part); u++)
   {
-    mutt_buffer_printf(drow, "   %s", x509_get_part(x509_subject, part[u]));
+    mutt_buffer_printf(drow, "   %s",
+                       !x509_get_part(x509_part_buf, x509_subject, part[u]) ?
+                       mutt_b2s(x509_part_buf) : _("Unknown"));
     mutt_menu_add_dialog_row(menu, mutt_b2s(drow));
   }
 
@@ -1244,9 +1280,13 @@ static int interactive_check_cert(X509 *cert, int idx, int len, SSL *ssl, int al
   x509_issuer = X509_get_issuer_name(cert);
   for (u = 0; u < mutt_array_size(part); u++)
   {
-    mutt_buffer_printf(drow, "   %s", x509_get_part(x509_issuer, part[u]));
+    mutt_buffer_printf(drow, "   %s",
+                       !x509_get_part(x509_part_buf, x509_issuer, part[u]) ?
+                       mutt_b2s(x509_part_buf) : _("Unknown"));
     mutt_menu_add_dialog_row(menu, mutt_b2s(drow));
   }
+
+  mutt_buffer_pool_release(&x509_part_buf);
 
   mutt_menu_add_dialog_row(menu, "");
   mutt_menu_add_dialog_row(menu, _("This certificate is valid"));
